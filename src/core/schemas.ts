@@ -278,6 +278,7 @@ export const ScriptSchema = z.object({
   wordCount: z.number().int(),
   theme: PaletteSchema.optional(),
   channelName: z.string().max(40).optional(),
+  presenter: z.enum(['2d', '3d']).optional(),
   scenes: z.array(SceneSchema).min(1),
 });
 export type Script = z.infer<typeof ScriptSchema>;

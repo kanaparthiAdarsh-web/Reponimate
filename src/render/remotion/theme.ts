@@ -12,6 +12,7 @@ export const theme = {
   hand: '"Patrick Hand", "Comic Sans MS", cursive',
   /** Which presenter appearance this video uses (see LOOKS in Presenter.tsx). */
   look: 0,
+  presenter: '3d' as '2d' | '3d',
 };
 
 export function applyPalette(p: Palette | undefined, seed = ''): void {

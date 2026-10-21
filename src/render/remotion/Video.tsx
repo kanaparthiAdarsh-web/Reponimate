@@ -5,6 +5,10 @@ import { Confetti } from './components/Props';
 import { ArchitectureDiagram, BarChart, BulletList, CodeWalkthrough, ComparisonPanel, FileTree, ProsConsPanel, StatsCounter, TerminalDemo } from './components/panels';
 import { Background, Captions, ChannelBadge, KeywordPops, LowerThird, ProgressBar, SectionTitle, Transition, revealFrame } from './components/primitives';
 import { Presenter } from './components/Presenter';
+import { Presenter3D } from './components/Presenter3D';
+
+/** The on-screen host: 3D game-style character by default, 2D flat character as a lightweight fallback. */
+const Host: React.FC<React.ComponentProps<typeof Presenter>> = (props) => (theme.presenter === '2d' ? <Presenter {...props} /> : <Presenter3D {...props} />);
 import { Whiteboard } from './components/Whiteboard';
 import { applyPalette, layoutFor, theme, type Layout } from './theme';
 import type { CodeToken, VideoProps } from './types';
@@ -48,7 +52,7 @@ const IntroAnimation: React.FC<{ headline: string; subhead?: string; layout: Lay
       )}
       {/* The host walks in and waves (or celebrates at the end). */}
       <div style={{ position: 'absolute', left: layout.portrait ? layout.width * 0.3 : layout.pad * 0.6, bottom: layout.portrait ? layout.height * 0.06 : 20 }}>
-        <Presenter pose={celebrate ? 'celebrate' : 'wave'} poses={celebrate ? ['celebrate', 'wave'] : ['wave', 'explain', 'point']} prop={celebrate ? 'rocket' : 'none'} words={words} size={layout.portrait ? 520 : 420} walkIn={!celebrate} />
+        <Host pose={celebrate ? 'celebrate' : 'wave'} poses={celebrate ? ['celebrate', 'wave'] : ['wave', 'explain', 'point']} prop={celebrate ? 'rocket' : 'none'} words={words} size={layout.portrait ? 620 : 560} walkIn={!celebrate} />
       </div>
       {celebrate && <Confetti width={layout.width} height={layout.height} delay={10} />}
     </AbsoluteFill>
@@ -70,7 +74,7 @@ const PresenterScene: React.FC<{ scene: Scene; words: SceneTiming['words']; layo
           {sm.speech}
         </div>
       )}
-      <Presenter pose={sm.pose} poses={sm.poses} prop={sm.prop} words={words} size={figSize} walkIn={scene.type === 'hook' || scene.type === 'intro'} />
+      <Host pose={sm.pose} poses={sm.poses} prop={sm.prop} words={words} size={figSize} walkIn={scene.type === 'hook' || scene.type === 'intro'} />
     </div>
   );
   if (!board.length) {
@@ -83,7 +87,7 @@ const PresenterScene: React.FC<{ scene: Scene; words: SceneTiming['words']; layo
         {scene.type === 'outro' && <Confetti width={layout.width} height={layout.height} delay={8} />}
         {sm.second && (
           <div style={{ position: 'absolute', right: layout.pad, bottom: layout.portrait ? 380 : 60 }}>
-            <Presenter pose={sm.second} words={[]} size={figSize * 0.7} outfit={theme.secondary} look={theme.look + 2} flip />
+            <Host pose={sm.second} words={[]} size={figSize * 0.7} outfit={theme.secondary} look={theme.look + 2} flip />
           </div>
         )}
       </AbsoluteFill>
@@ -95,7 +99,7 @@ const PresenterScene: React.FC<{ scene: Scene; words: SceneTiming['words']; layo
         <SectionTitle text={scene.visual.headline ?? scene.title} layout={layout} />
         <Whiteboard items={board} width={layout.width - layout.pad * 2} height={560} reveal={reveal} fontSize={layout.unit * 1.05} />
         <div style={{ marginTop: -10 }}>
-          <Presenter pose={sm.pose} poses={sm.poses} prop={sm.prop} words={words} size={560} />
+          <Host pose={sm.pose} poses={sm.poses} prop={sm.prop} words={words} size={560} />
         </div>
       </AbsoluteFill>
     );
@@ -109,7 +113,7 @@ const PresenterScene: React.FC<{ scene: Scene; words: SceneTiming['words']; layo
       </div>
       {sm.second && (
         <div style={{ position: 'absolute', left: layout.pad + 360, bottom: 120 }}>
-          <Presenter pose={sm.second} words={[]} size={380} outfit={theme.secondary} look={theme.look + 2} />
+          <Host pose={sm.second} words={[]} size={380} outfit={theme.secondary} look={theme.look + 2} />
         </div>
       )}
     </AbsoluteFill>
@@ -136,7 +140,7 @@ const SceneBody: React.FC<{ scene: Scene; timing: SceneTiming; tokens?: CodeToke
         <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>{children}</div>
         {host && (
           <div style={{ alignSelf: 'flex-end', marginBottom: -40 }}>
-            <Presenter pose={v.host!.poses[0]} poses={v.host!.poses} prop={v.host!.prop} words={words} size={400} />
+            <Host pose={v.host!.poses[0]} poses={v.host!.poses} prop={v.host!.prop} words={words} size={400} />
           </div>
         )}
       </div>
@@ -190,7 +194,7 @@ const SceneBody: React.FC<{ scene: Scene; timing: SceneTiming; tokens?: CodeToke
     default:
       return frame(
         <div style={{ display: 'flex', alignItems: 'center', gap: 50, width: '100%' }}>
-          {explainer && !layout.portrait && !host && <Presenter pose="point" poses={['point', 'explain']} words={words} size={460} />}
+          {explainer && !layout.portrait && !host && <Host pose="point" poses={['point', 'explain']} words={words} size={460} />}
           <div style={{ flex: 1 }}>
             <BulletList items={v.bullets ?? (v.subhead ? [v.subhead] : [])} layout={layout} words={words} />
           </div>
@@ -201,6 +205,7 @@ const SceneBody: React.FC<{ scene: Scene; timing: SceneTiming; tokens?: CodeToke
 
 export const Explainer: React.FC<VideoProps> = ({ script, timing, code }) => {
   applyPalette(script.theme, script.channelName ?? script.subject);
+  theme.presenter = script.presenter ?? '3d';
   const { width, height, fps } = useVideoConfig();
   const layout = layoutFor(width, height);
   const explainer = script.mode !== 'repo-video';
