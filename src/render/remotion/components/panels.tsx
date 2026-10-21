@@ -22,10 +22,13 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = useEntrance(4);
-  const width = totalWidth;
+  // With a flowchart, code and chart share the screen (side by side; stacked on vertical video).
+  const split = Boolean(flow);
+  const width = split && !layout.portrait ? Math.round(totalWidth * 0.56) : totalWidth;
+  const panelH = split && layout.portrait ? Math.round(height * 0.56) : height;
   const lines = tokens ?? code.code.split('\n').map((l) => [{ content: l, color: theme.text }]);
   const longest = Math.max(20, ...code.code.split('\n').map((l) => l.replace(/\t/g, '  ').length));
-  const fontSize = Math.max(20, Math.min(layout.unit * 0.78, (width - 140) / (longest * 0.62), (height - 120) / (lines.length * 1.5)));
+  const fontSize = Math.max(20, Math.min(layout.unit * 0.78, (width - 140) / (longest * 0.62), (panelH - 120) / (lines.length * 1.5)));
   // Step through the highlighted lines in sync with the narration.
   const hl = code.highlight.length ? code.highlight : [code.startLine];
   const step = hl.findLastIndex((_, i) => frame >= revealFrame(i, hl.length, words, fps, 1));
@@ -34,16 +37,17 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
   const stepStart = revealFrame(Math.max(0, step), hl.length, words, fps, 1);
   const cam = spring({ frame: frame - stepStart, fps, config: { damping: 20, stiffness: 80 } });
   const lineH = fontSize * 1.45;
-  const visibleH = height - 90;
+  const visibleH = panelH - 90;
   const contentH = lines.length * lineH + 36;
   const yFor = (line: number) => (contentH > visibleH ? Math.min(0, Math.max(visibleH - contentH, visibleH / 2 - (line - code.startLine) * lineH)) : 0);
   const camY = yFor(hl[Math.max(0, step - 1)]) + (yFor(active) - yFor(hl[Math.max(0, step - 1)])) * cam;
-  const zoom = 1 + 0.04 * Math.sin(Math.min(1, cam) * Math.PI);
+  // Calm camera: glide only, no zoom pulse, so the eye can stay on the line.
+  const zoom = 1;
   const panel = (
     <div
       style={{
         width,
-        height,
+        height: panelH,
         background: theme.codeBg,
         border: `2px solid ${theme.panelBorder}`,
         borderRadius: 20,
@@ -61,7 +65,7 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
           {code.path} · lines {code.startLine}–{code.endLine}
         </div>
       </div>
-      <div style={{ overflow: 'hidden', height: height - 62 }}>
+      <div style={{ overflow: 'hidden', height: panelH - 62 }}>
       <div style={{ padding: '18px 0', fontFamily: theme.mono, fontSize, lineHeight: 1.45, transform: `translateY(${camY}px) scale(${zoom})`, transformOrigin: `30% ${(active - code.startLine) * lineH}px` }}>
         {lines.map((line, i) => {
           const n = code.startLine + i;
@@ -85,37 +89,41 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
     </div>
   );
   if (!flow) return panel;
-  // Alternate views for every explained line: code first (line highlighted), then a card-flip to the
-  // flowchart with that line's node lit, then back to code for the next line.
+  // Both views stay on screen: the explained line and its flowchart node light up together, joined by a
+  // soft connector, so the eye never has to re-find anything.
   const prev = hl[Math.max(0, step - 1)];
-  const nextStart = step + 1 < hl.length ? revealFrame(step + 1, hl.length, words, fps, 1) : stepStart + fps * 6;
-  const span = Math.max(fps * 1.5, nextStart - stepStart);
-  const phase = step < 0 ? 0 : (frame - stepStart) / span;
-  const flipAt = 0.5;
-  const toChart = interpolate(phase, [flipAt - 0.06, flipAt + 0.06], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const back = step + 1 < hl.length ? interpolate(phase, [0.94, 1], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) : 0;
-  const showChart = Math.max(0, toChart - back);
-  const angle = showChart * 180;
-  const chart = <Flowchart flow={flow} activeLine={active} prevLine={prev} stepFrame={stepStart + Math.round(span * flipAt)} layout={layout} width={totalWidth} height={height - 40} />;
-  const face = (child: React.ReactNode, rot: number) => (
-    <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: `rotateY(${rot}deg)`, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>{child}</div>
-  );
+  const chartW = layout.portrait ? totalWidth : totalWidth - width - 40;
+  const chartH = layout.portrait ? height - panelH - 30 : height;
+  const chart = <Flowchart flow={flow} activeLine={active} prevLine={prev} stepFrame={stepStart} layout={layout} width={chartW - 40} height={chartH - 40} />;
+  const n = flow.nodes.length;
+  const activeIdx = Math.max(0, flow.nodes.reduce((acc, node, i) => (node.line <= active ? i : acc), 0));
+  // Connector endpoints (landscape): right edge of the active code line → left edge of the active node.
+  const lineY = 62 + 18 + camY + (active - code.startLine + 0.5) * lineH;
+  const nodeY = 20 + ((chartH - 40) / n) * (activeIdx + 0.5);
+  const nodeX = width + 40 + 20 + (chartW - 40) * 0.45 - Math.min((chartW - 40) * 0.8, 380) / 2;
+  const glow = spring({ frame: frame - stepStart, fps, config: { damping: 20 } });
+  const showLink = !layout.portrait && step >= 0 && lineY > 70 && lineY < panelH - 10;
   return (
-    <div style={{ position: 'relative', width: totalWidth, height, perspective: 2200 }}>
-      <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `rotateY(${angle}deg)` }}>
-        {face(panel, 0)}
-        {face(<div style={{ background: alpha(theme.panel, 0.85), border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: 20 }}>{chart}</div>, 180)}
+    <div style={{ position: 'relative', width: totalWidth, height, display: 'flex', flexDirection: layout.portrait ? 'column' : 'row', gap: layout.portrait ? 30 : 40 }}>
+      <div style={{ width, height: panelH, flexShrink: 0 }}>{panel}</div>
+      <div style={{ width: chartW, height: chartH, background: alpha(theme.panel, 0.7), border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: 20, boxSizing: 'border-box', opacity: enter }}>
+        {chart}
       </div>
-      <div style={{ position: 'absolute', top: -46, right: 0, display: 'flex', gap: 8, fontFamily: theme.mono, fontSize: layout.unit * 0.42 }}>
-        {['CODE', 'FLOW'].map((label, i) => {
-          const on = i === 0 ? angle < 90 : angle >= 90;
-          return (
-            <div key={label} style={{ padding: '4px 14px', borderRadius: 999, background: on ? theme.primary : theme.panel, color: on ? theme.ink : theme.muted, border: `1px solid ${theme.panelBorder}` }}>
-              {label}
-            </div>
-          );
-        })}
-      </div>
+      {showLink && (
+        <svg width={totalWidth} height={height} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', overflow: 'visible' }}>
+          <path
+            d={`M ${width - 6} ${lineY} C ${width + 30} ${lineY}, ${nodeX - 40} ${nodeY}, ${nodeX} ${nodeY}`}
+            stroke={theme.primary}
+            strokeWidth={3}
+            fill="none"
+            strokeDasharray="8 7"
+            opacity={0.75 * glow}
+            pathLength={1}
+          />
+          <circle cx={width - 6} cy={lineY} r={6} fill={theme.primary} opacity={glow} />
+          <circle cx={nodeX} cy={nodeY} r={6} fill={theme.primary} opacity={glow} />
+        </svg>
+      )}
     </div>
   );
 };
