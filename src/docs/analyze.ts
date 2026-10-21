@@ -35,9 +35,14 @@ export function rankSentences(sentences: LocatedSentence[], docFreq: Map<string,
   for (const s of sentences) for (const t of tokenize(s.text)) tf.set(t, (tf.get(t) ?? 0) + 1);
   return sentences.map((s, i) => {
     const toks = tokenize(s.text);
-    const score =
+    const words = s.text.split(/\s+/).length;
+    let score =
       toks.reduce((a, t) => a + (tf.get(t) ?? 0) * Math.log(1 + totalDocs / (1 + (docFreq.get(t) ?? 0))), 0) / Math.max(4, toks.length) +
       (i === 0 ? 1.5 : i < 3 ? 0.5 : 0);
+    // Narration should be easy to follow: prefer 8–28 word sentences, avoid formulas and citation clutter.
+    if (words > 28) score *= 0.6;
+    if (words < 8) score *= 0.7;
+    if (/[→=]|\[[^\]]*\]|\b[A-Z][a-z]?\d|\(\s*\)/.test(s.text)) score *= 0.3;
     return { s, score };
   });
 }

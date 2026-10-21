@@ -162,7 +162,7 @@ const SceneBody: React.FC<{ scene: Scene; timing: SceneTiming; tokens?: CodeToke
       );
     case 'code':
       return v.code
-        ? frame(<CodeWalkthrough code={v.code} tokens={tokens} words={words} layout={layout} width={panelW} height={contentH} />, false)
+        ? frame(<CodeWalkthrough code={v.code} tokens={tokens} words={words} layout={layout} width={panelW} height={contentH} flow={v.flow} />, false)
         : frame(<BulletList items={v.bullets ?? []} layout={layout} words={words} />);
     case 'architecture':
     case 'data-flow':

@@ -5,21 +5,24 @@ import { alpha, theme, type Layout } from '../theme';
 import type { CodeToken } from '../types';
 import { revealFrame, useEntrance } from './primitives';
 import { DrawnIcon } from './Props';
+import { Flowchart } from './Flowchart';
 import { LANGUAGE_COLORS } from '../../palette-data';
 
 /* ------------------------------ CodeWalkthrough ------------------------------ */
 
-export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; tokens?: CodeToken[][]; words: WordTiming[]; layout: Layout; width: number; height: number }> = ({
+export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; tokens?: CodeToken[][]; words: WordTiming[]; layout: Layout; width: number; height: number; flow?: Visual['flow'] }> = ({
   code,
   tokens,
   words,
   layout,
-  width,
+  width: totalWidth,
   height,
+  flow,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = useEntrance(4);
+  const width = totalWidth;
   const lines = tokens ?? code.code.split('\n').map((l) => [{ content: l, color: theme.text }]);
   const longest = Math.max(20, ...code.code.split('\n').map((l) => l.replace(/\t/g, '  ').length));
   const fontSize = Math.max(20, Math.min(layout.unit * 0.78, (width - 140) / (longest * 0.62), (height - 120) / (lines.length * 1.5)));
@@ -36,7 +39,7 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
   const yFor = (line: number) => (contentH > visibleH ? Math.min(0, Math.max(visibleH - contentH, visibleH / 2 - (line - code.startLine) * lineH)) : 0);
   const camY = yFor(hl[Math.max(0, step - 1)]) + (yFor(active) - yFor(hl[Math.max(0, step - 1)])) * cam;
   const zoom = 1 + 0.04 * Math.sin(Math.min(1, cam) * Math.PI);
-  return (
+  const panel = (
     <div
       style={{
         width,
@@ -58,6 +61,7 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
           {code.path} · lines {code.startLine}–{code.endLine}
         </div>
       </div>
+      <div style={{ overflow: 'hidden', height: height - 62 }}>
       <div style={{ padding: '18px 0', fontFamily: theme.mono, fontSize, lineHeight: 1.45, transform: `translateY(${camY}px) scale(${zoom})`, transformOrigin: `30% ${(active - code.startLine) * lineH}px` }}>
         {lines.map((line, i) => {
           const n = code.startLine + i;
@@ -73,6 +77,41 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
                   </span>
                 ))}
               </span>
+            </div>
+          );
+        })}
+      </div>
+      </div>
+    </div>
+  );
+  if (!flow) return panel;
+  // Alternate views for every explained line: code first (line highlighted), then a card-flip to the
+  // flowchart with that line's node lit, then back to code for the next line.
+  const prev = hl[Math.max(0, step - 1)];
+  const nextStart = step + 1 < hl.length ? revealFrame(step + 1, hl.length, words, fps, 1) : stepStart + fps * 6;
+  const span = Math.max(fps * 1.5, nextStart - stepStart);
+  const phase = step < 0 ? 0 : (frame - stepStart) / span;
+  const flipAt = 0.5;
+  const toChart = interpolate(phase, [flipAt - 0.06, flipAt + 0.06], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const back = step + 1 < hl.length ? interpolate(phase, [0.94, 1], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) : 0;
+  const showChart = Math.max(0, toChart - back);
+  const angle = showChart * 180;
+  const chart = <Flowchart flow={flow} activeLine={active} prevLine={prev} stepFrame={stepStart + Math.round(span * flipAt)} layout={layout} width={totalWidth} height={height - 40} />;
+  const face = (child: React.ReactNode, rot: number) => (
+    <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: `rotateY(${rot}deg)`, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>{child}</div>
+  );
+  return (
+    <div style={{ position: 'relative', width: totalWidth, height, perspective: 2200 }}>
+      <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `rotateY(${angle}deg)` }}>
+        {face(panel, 0)}
+        {face(<div style={{ background: alpha(theme.panel, 0.85), border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: 20 }}>{chart}</div>, 180)}
+      </div>
+      <div style={{ position: 'absolute', top: -46, right: 0, display: 'flex', gap: 8, fontFamily: theme.mono, fontSize: layout.unit * 0.42 }}>
+        {['CODE', 'FLOW'].map((label, i) => {
+          const on = i === 0 ? angle < 90 : angle >= 90;
+          return (
+            <div key={label} style={{ padding: '4px 14px', borderRadius: 999, background: on ? theme.primary : theme.panel, color: on ? theme.ink : theme.muted, border: `1px solid ${theme.panelBorder}` }}>
+              {label}
             </div>
           );
         })}

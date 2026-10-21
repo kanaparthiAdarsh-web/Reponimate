@@ -7,7 +7,7 @@ Reponimate reads the real source material, builds a local RAG knowledge base, wr
 | Mode | Input | Output |
 |---|---|---|
 | **① Repo → Video** | a public GitHub URL | 16:9 code walkthrough (architecture, real code, usage, pros and cons) |
-| **② Description → Video** | pasted docs or notes, a web page URL, or a topic | 16:9 explainer with a animated presenter teacher and whiteboards |
+| **② Description → Video** | pasted docs or notes, a web page URL, or a topic | 16:9 explainer with an animated presenter, whiteboards and props |
 | **③ Description → Reel** | same as ② | 9:16 short under 60 s with big captions, for Shorts and Reels |
 | **⚡ Start (autopilot)** | nothing | picks a trending repo or topic (GitHub, Hacker News, Wikipedia) and makes the video |
 
@@ -49,6 +49,7 @@ You don't need Ollama. Without it, use `--llm none` (or pick "Extractive" in the
 --text "..." | --file notes.md | --url https://... | --topic "..."  --trending
 --llm ollama|anthropic|none              --tts piper|kokoro|espeak
 --preview  (half resolution)             --chunk-render (20 s chunks, resumable, for weak PCs)
+--channel "My Channel"  (badge, bottom-right) --no-music   --fresh (ignore cached results)
 --resume-from <stage>                    --stop-after <stage>        --out <dir>
 ```
 
@@ -124,6 +125,15 @@ These are the measures that keep the narration from making things up. Each one h
 The CPU-heavy part of ingestion runs in Rust (`crates/reponimate-scan`): the parallel directory walk, filtering, binary sniffing and regex secret redaction. A test checks that its output matches the TypeScript implementation exactly, and the pipeline falls back to TypeScript when the binary isn't built. On real runs the slow parts are rendering (Chromium), TTS and the LLM. Rust wouldn't speed those up, and Remotion needs React, so they stay in their best-suited tools.
 
 ---
+
+## What the videos look like
+
+- **Animated human presenter.** A flat-vector host with hair, face, blinking eyes, expressive brows and lip-sync. The host walks in, changes pose at every sentence (wave, point, think, explain, present, celebrate) and uses animated props: an idea bulb, a spinning gear, a magnifier over code, a laptop, a rocket. The outfit follows the video's palette, and the appearance varies per channel or video.
+- **Motion graphics with meaning.** Architecture diagrams draw themselves and data packets flow along the import edges, while nodes pulse when the narrator names them. The camera glides to each highlighted code line. Counters tick up, language bars grow in GitHub's language colours, and keywords pop up as they are spoken. Colour-panel wipes mark scene changes, and code glyphs drift in the background.
+- **A palette per repository.** Curated, muted palettes (no neon) are chosen from what the project is: Ember for Rust/systems, Fjord for Go/infra, Orchard for Python/data, Plum for AI, Studio for web UI, Moss for security, Chalkboard for explainers, and more. A hue shift derived from the repository name makes each video's colours its own.
+- **Channel badge.** Type your channel name in the studio (or pass `--channel`, or set `CHANNEL_NAME`). It shows bottom-right on every frame, in the outro, the description and the thumbnail.
+- **Music and sound effects.** `python/music.py` synthesizes an original lo-fi track for every video, with key, progression and tempo seeded by the subject and the mood set by the mode. It also makes whooshes on transitions, pops on keywords and a chime at the end. Everything is generated from oscillators and noise, so there's nothing to claim. The music ducks under the voice. Use `MUSIC_FILE` to supply your own track, or `--no-music` to turn it off.
+- **Narration that holds attention.** Scenes open on tension or a question and end with an open loop that teases the next one. Viewer questions and clearly marked analogies are allowed, but the verifier still rejects invented names, numbers, hype and presuppositions ("Why does NASA use it?").
 
 ## Voices (no cloning, open licences)
 

@@ -230,6 +230,13 @@ export const VisualSchema = z.object({
   /** Companion host figure shown beside a panel (code, terminal, pros/cons) in repo videos. */
   host: z.object({ poses: z.array(PoseSchema), prop: PropSchema.optional() }).optional(),
   bars: z.array(z.object({ label: z.string(), value: z.number() })).optional(),
+  /** Flowchart derived statically from the code excerpt; node lines tie it to the highlighted code. */
+  flow: z
+    .object({
+      nodes: z.array(z.object({ id: z.string(), kind: z.enum(['start', 'decision', 'loop', 'process', 'return', 'error']), label: z.string(), line: z.number().int() })),
+      edges: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional() })),
+    })
+    .optional(),
   terminal: z
     .object({
       label: z.string(),

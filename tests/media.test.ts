@@ -70,3 +70,28 @@ describe('architecture layout', () => {
     expect(pos.get('b')!.x).toBeLessThan(pos.get('c')!.x);
   });
 });
+
+describe('code → flowchart', () => {
+  it('turns real code into start/decision/loop/return nodes tied to source lines', async () => {
+    const { buildFlow } = await import('../src/script/flow.js');
+    const code = [
+      'export function pick(items, limit) {',
+      '  if (!items.length) {',
+      "    throw new Error('empty');",
+      '  }',
+      '  const out = [];',
+      '  for (const item of items) {',
+      '    out.push(item);',
+      '  }',
+      '  return out.slice(0, limit);',
+      '}',
+    ].join('\n');
+    const flow = buildFlow(code, 10, 'pick')!;
+    expect(flow.nodes.map((n) => n.kind)).toEqual(['start', 'decision', 'error', 'process', 'loop', 'process', 'return']);
+    expect(flow.nodes[0]).toMatchObject({ label: 'pick(items, limit)', line: 10 });
+    expect(flow.nodes[1].label).toBe('!items.length?');
+    expect(flow.edges).toContainEqual({ from: 'n1', to: 'n2', label: 'yes' });
+    expect(flow.edges.some((e) => e.from === 'n1' && e.label === 'no')).toBe(true);
+    expect(buildFlow('const a = 1;', 1)).toBeNull();
+  });
+});

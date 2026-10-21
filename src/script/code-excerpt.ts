@@ -1,6 +1,7 @@
 import type { Visual } from '../core/schemas.js';
 import type { RepoFile } from '../repo/inventory.js';
 import { extractSymbols } from '../repo/symbols.js';
+import { buildFlow, type Flow } from './flow.js';
 
 export const SHIKI_LANG: Record<string, string> = {
   TypeScript: 'typescript', JavaScript: 'javascript', Python: 'python', Go: 'go', Rust: 'rust', Java: 'java',
@@ -13,7 +14,7 @@ export const SHIKI_LANG: Record<string, string> = {
  * Picks a short, genuine excerpt from a file: the most substantial exported declaration, capped at `maxLines`.
  * The code is copied verbatim; nothing is reformatted or invented.
  */
-export function pickExcerpt(file: RepoFile, maxLines = 16): { visual: NonNullable<Visual['code']>; symbol?: string } {
+function excerptAt(file: RepoFile, maxLines: number): { visual: NonNullable<Visual['code']>; symbol?: string; flow?: Flow } {
   const lines = file.text.split('\n');
   const syms = extractSymbols(file);
   const ranked = syms
@@ -34,8 +35,23 @@ export function pickExcerpt(file: RepoFile, maxLines = 16): { visual: NonNullabl
     if (pick && n === pick.s.line) highlight.push(n);
     else if (/\breturn\b|\bawait\b|\byield\b|\bthrow\b|=>|\?\?|\.map\(|\.filter\(|\.reduce\(/.test(l) && highlight.length < 4) highlight.push(n);
   });
+  const flow = buildFlow(code, start, pick?.s.name);
+  // When there is a flowchart, the narration steps through its nodes so code line and chart node light up together.
+  const steps = flow ? flow.nodes.map((n) => n.line).slice(0, 8) : highlight;
   return {
-    visual: { path: file.path, language: SHIKI_LANG[file.language] ?? 'text', startLine: start, endLine: end, code, highlight },
+    visual: { path: file.path, language: SHIKI_LANG[file.language] ?? 'text', startLine: start, endLine: end, code, highlight: steps },
     symbol: pick?.s.name,
+    flow: flow ?? undefined,
   };
+}
+
+/**
+ * Short excerpts stay readable; when a longer window (up to 30 lines) yields a richer flowchart,
+ * use it — the camera pans along the code while the chart explains the structure.
+ */
+export function pickExcerpt(file: RepoFile, maxLines = 16): ReturnType<typeof excerptAt> {
+  const short = excerptAt(file, maxLines);
+  const long = excerptAt(file, 30);
+  const nodes = (x: ReturnType<typeof excerptAt>) => x.flow?.nodes.length ?? 0;
+  return nodes(long) >= 5 && nodes(long) > nodes(short) ? long : short;
 }

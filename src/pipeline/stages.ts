@@ -211,8 +211,13 @@ const align: Stage = {
       let method: 'whisper' | 'proportional' = 'proportional';
       if (whisperOk) {
         try {
-          const rec = await whisperWords(ctx.cfg.tts.python, ctx.cfg.whisperModel, wav, spoken.text.slice(0, 200));
-          words = alignToScript(spoken, rec);
+          // Never prompt Whisper with the script itself: it then tends to skip ahead and transcribe only the end.
+          // First pass without a prompt; if the match is poor, retry with a vocabulary hint of unusual words only.
+          words = alignToScript(spoken, await whisperWords(ctx.cfg.tts.python, ctx.cfg.whisperModel, wav, ''));
+          if (!words) {
+            const vocab = [...new Set(scene.narration.match(/\b[\w.-]*[A-Z_.][\w.-]*\b/g) ?? [])].slice(0, 20).join(', ');
+            words = alignToScript(spoken, await whisperWords(ctx.cfg.tts.python, ctx.cfg.whisperModel, wav, vocab));
+          }
           if (words) method = 'whisper';
           else ctx.log.warn(`${scene.id}: Whisper timings looked unreliable; using proportional timings.`);
         } catch (err) {

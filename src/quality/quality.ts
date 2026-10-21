@@ -68,8 +68,8 @@ export async function runQuality(ctx: StageContext): Promise<QualityReport> {
 
   /* readability */
   const codeScenes = script.scenes.filter((s) => s.visual.code);
-  const tooBig = codeScenes.filter((s) => s.visual.code!.code.split('\n').length > 18 || Math.max(...s.visual.code!.code.split('\n').map((l) => l.length)) > 110);
-  add('code excerpts readable', tooBig.length === 0, tooBig.length ? `long excerpts in ${tooBig.map((s) => s.id).join(', ')}` : `${codeScenes.length} excerpts, ≤18 lines each`, 'warning');
+  const tooBig = codeScenes.filter((s) => s.visual.code!.code.split('\n').length > (s.visual.flow ? 30 : 18) || Math.max(...s.visual.code!.code.split('\n').map((l) => l.length)) > 110);
+  add('code excerpts readable', tooBig.length === 0, tooBig.length ? `long excerpts in ${tooBig.map((s) => s.id).join(', ')}` : `${codeScenes.length} excerpts (≤18 lines, ≤30 with a flowchart and camera pan)`, 'warning');
 
   /* code excerpts match source */
   if (analysis.kind === 'repo' && ctx.state.repoDir) {

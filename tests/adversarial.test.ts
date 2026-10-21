@@ -238,6 +238,15 @@ describe('prompt injection', () => {
     expect(checkSupport('It was written by Linus Torvalds for clean URLs.', [c]).supported).toBe(false);
   });
 
+  it('accepts genuine source sentences with possessives, big numbers and thousands separators', () => {
+    const c: Chunk = { id: 'c1', sourceId: 'w', path: 'wiki', startLine: 1, endLine: 1, kind: 'doc', text: "Photosynthesis maintains the oxygen content of the Earth's atmosphere. Organisms convert around 100–115 billion tons of carbon into biomass per year. A leaf can contain between 450,000 and 800,000 chloroplasts." };
+    expect(checkSupport("Photosynthesis maintains the oxygen content of the Earth's atmosphere.", [c]).supported).toBe(true);
+    expect(checkSupport('Organisms convert around 100–115 billion tons of carbon into biomass per year.', [c]).supported).toBe(true);
+    expect(checkSupport('A leaf can contain between 450,000 and 800,000 chloroplasts.', [c]).supported).toBe(true);
+    expect(checkSupport('A leaf can contain 900,000 chloroplasts.', [c]).supported).toBe(false);
+    expect(checkSupport('Photosynthesis is loved by billions of people.', [c]).supported).toBe(false);
+  });
+
   it('catches negation flips', () => {
     const c: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 1, kind: 'doc', text: 'safequeue supports Windows, macOS and Linux.' };
     expect(checkSupport('safequeue supports Windows and Linux.', [c]).supported).toBe(true);

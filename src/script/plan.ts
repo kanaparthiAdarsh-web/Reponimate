@@ -176,7 +176,7 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
     const f = getFile(k.path);
     if (!f || f.lines < 4 || f.path.endsWith('.d.ts')) continue;
     seen.add(k.path);
-    const { visual, symbol } = pickExcerpt(f);
+    const { visual, symbol, flow } = pickExcerpt(f);
     const mod = a.modules.find((m) => m.path === k.path);
     add({
       type: 'code',
@@ -189,7 +189,7 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
         symbol ? `On screen is ${symbol}, from line ${visual.startLine} to ${visual.endLine}.` : `On screen are lines ${visual.startLine} to ${visual.endLine}.`,
         k.reasons.length ? sentence(`This file matters because it is ${list(k.reasons.slice(0, 2))}`) : '',
       ].join(' '),
-      visual: { headline: k.path, code: visual, host: { poses: ['point', 'think', 'explain'], prop: 'magnifier' } },
+      visual: { headline: k.path, code: visual, flow, host: flow ? undefined : { poses: ['point', 'think', 'explain'], prop: 'magnifier' } },
       visualDescription: `Code panel with a genuine excerpt from ${k.path}; the camera glides to each highlighted line as it is discussed while the host inspects it with a magnifier.`,
       evidence: [{ sourceId: 'repo', path: k.path, startLine: visual.startLine, endLine: visual.endLine }],
       targetWords: 160,
@@ -197,6 +197,7 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
       emphasis: symbol ? [symbol] : [],
       sceneFacts: [
         `On screen: ${symbol ? `${symbol}, ` : ''}lines ${visual.startLine} to ${visual.endLine} of ${k.path}.`,
+        ...(flow ? [`Flowchart of the excerpt: ${flow.nodes.map((n) => `${n.kind} "${n.label}" (line ${n.line})`).join(', ')}.`] : []),
         `${k.path} matters because it is ${list(k.reasons.slice(0, 2))}.`,
       ],
     });
@@ -300,6 +301,8 @@ const PROPS: Prop[] = ['bulb', 'gear', 'magnifier', 'laptop'];
 
 export function planDocVideo(a: DocAnalysis): ScenePlan[] {
   const plans: ScenePlan[] = [];
+  // Never narrate the same sentence twice (the summary is often also a section's first key point).
+  const used = new Set([a.summary.text]);
   let n = 0;
   const add = (p: Omit<ScenePlan, 'id'>): void => {
     plans.push({ ...p, id: `s${String(++n).padStart(2, '0')}` });
@@ -319,7 +322,9 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
     emphasis: [a.title],
   });
   sections.forEach((sec, i) => {
-    const points = sec.keyPoints.slice(0, 3);
+    const points = sec.keyPoints.filter((p) => !used.has(p.text)).slice(0, 3);
+    if (!points.length) return;
+    for (const p of points) used.add(p.text);
     const withBoard = i % 2 === 0;
     add({
       type: withBoard ? 'presenter' : 'bullets',
@@ -366,7 +371,8 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
     title: 'Recap',
     query: `${a.title} summary ${sections.map((s) => s.heading).join(' ')}`,
     brief: 'Recap the main ideas in order. No new facts.',
-    extractive: `Let's recap. ${sentence(a.summary.text)} We covered ${list(sections.slice(0, 5).map((s) => s.heading))}.`,
+    extractive: `Let's recap. We covered ${list(sections.slice(0, 5).map((s) => s.heading))}. Which part surprised you most?`,
+    sceneFacts: [`Sections covered: ${sections.map((s) => s.heading).join(', ')}.`],
     visual: { headline: 'Recap', presenter: { pose: 'present', poses: ['present', 'point', 'explain'], prop: 'rocket', board: sections.slice(0, 5).map((s) => short(s.heading, 40)) } },
     visualDescription: 'The presenter presents a recap board listing the sections.',
     evidence: a.summary.evidence,

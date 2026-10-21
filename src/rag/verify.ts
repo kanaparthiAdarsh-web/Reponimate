@@ -12,14 +12,14 @@ const FRAMING = new Set(
     'version summary recap wrap here now time today\'s inside under hood meet real source pieces fit weigh strengths weaknesses plus side other hand sum up keep read half story wired together interesting catch surprise secret magic actually really work works happen ' +
     'before after finally first next honest trade offs install hood pull back curtain lot more than meets eye clever trick ' +
     'question ever wonder wondered whether worth idea problem solve solves solved simple simpler deal big turns out guess ' +
-    'stick around stay end because short answer long answer piece puzzle care break nutshell explained follow quick explainers up open though want would').split(/\s+/).map(stem),
+    'stick around stay end because short answer long answer piece puzzle care break nutshell explained follow quick explainers up open though want would surprised surprising part parts').split(/\s+/).map(stem),
 );
 
 /** Sentences that announce themselves as comparisons rather than facts. */
 const ANALOGY = /^(imagine|picture this|think of (it|this|that) (as|like)|it'?s (a bit |kind of |sort of )?like|kind of like|like a\b)/i;
 
 /** Marketing words that need explicit source support before the narrator may say them. */
-const HYPE = /\b(fastest|best|most popular|revolutionary|industry[- ]standard|blazing|millions|billions|world'?s|#1|number one|guaranteed)\b/i;
+const HYPE = /\b(fastest|best|most popular|revolutionary|industry[- ]standard|blazing|world'?s (best|fastest|most|leading)|#1|number one|guaranteed)\b|\b(millions|billions)\b(?![^.]*\d)(?<!\d[^.]*)/i;
 
 export interface SupportResult {
   supported: boolean;
@@ -54,7 +54,7 @@ export function properNouns(sentence: string): string[] {
   const words = sentence.replace(/[`"“”‘’()]/g, ' ').split(/\s+/);
   for (let i = 1; i < words.length; i++) {
     const prev = words[i - 1];
-    const w = words[i].replace(/[^\p{L}\p{N}+#.-]/gu, '').replace(/[.-]+$/, '');
+    const w = words[i].replace(/['’]s$/, '').replace(/[^\p{L}\p{N}+#.-]/gu, '').replace(/[.-]+$/, '');
     if (!w || /[.!?:]$/.test(prev) || NAME_OK.has(w)) continue;
     if (/^\p{Lu}[\p{Ll}]+[\p{L}\p{N}]*$/u.test(w) || /^\p{Lu}{2,}[\p{L}\p{N}]*$/u.test(w)) out.push(w);
   }
@@ -130,8 +130,8 @@ export function checkSupport(sentence: string, chunks: Chunk[], threshold = 0.5)
     .slice(0, 2)
     .map((x) => `${x.c.path}\n${x.c.text}`.toLowerCase());
   for (const n of numbersIn(sentence)) {
-    const forms = [n.digits, n.word].filter(Boolean) as string[];
-    const found = supporting.some((t) => forms.some((f) => new RegExp(`(^|[^0-9a-z.])${f.replace('.', '\\.')}([^0-9a-z]|$)`).test(t)));
+    const forms = [n.raw, n.digits, n.word].filter(Boolean) as string[];
+    const found = supporting.some((t) => forms.some((f) => new RegExp(`(^|[^0-9a-z.])${f.toLowerCase().replace(/[.,]/g, (c) => '\\' + c)}([^0-9a-z]|$)`).test(t)));
     if (!found && !missingTerms.includes(n.raw)) missingTerms.push(n.raw);
   }
   const negationMismatch = NEG.test(sentence) && !(bestChunk && NEG.test(bestChunk.text));
