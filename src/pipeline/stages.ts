@@ -1,13 +1,14 @@
 import crypto from 'node:crypto';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { proportionalTimings, alignToScript, whisperWords } from '../align/align.js';
+import { proportionalTimings, alignToScript, whisperBatch } from '../align/align.js';
 import { ROOT } from '../core/config.js';
 import { UserError } from '../core/errors.js';
 import { ensureDir, readJson, writeJson } from '../core/files.js';
 import { probeDuration, silenceBounds } from '../core/media.js';
-import { AnalysisSchema, KnowledgeBaseSchema, MetadataSchema, ScriptSchema, SourceSchema, TimingSchema, type Timing } from '../core/schemas.js';
+import { AnalysisSchema, KnowledgeBaseSchema, MetadataSchema, ScriptSchema, SourceSchema, TimingSchema, type Timing, type WordTiming } from '../core/schemas.js';
 import { analyzeDocs } from '../docs/analyze.js';
 import { fromText, fromUrl, fromWikipedia, searchWikipedia, type LoadedDoc } from '../docs/sources.js';
 import { createLlm } from '../llm/provider.js';
@@ -142,6 +143,7 @@ const script: Stage = {
       index,
       llm,
       log: ctx.log,
+      parallel: llm ? ctx.cfg.llm.parallel : 1,
     });
     result.theme = choosePalette(analysis, input.mode);
     if (input.channelName) result.channelName = input.channelName;
@@ -165,30 +167,47 @@ const tts: Stage = {
   title: 'Synthesize narration (open-licence voice)',
   outputs: ['audio/manifest.json'],
   async run(ctx) {
+    const { runOk } = await import('../core/exec.js');
     const s = loadScript(ctx);
     const provider = await createTts(ctx.cfg, ctx.state.ttsOverride);
     ctx.log.info(`voice: ${provider.name} / ${provider.voice} — ${provider.license}`);
     const dir = ensureDir(ctx.file('audio'));
-    for (const [i, scene] of s.scenes.entries()) {
-      const spoken = toSpoken(scene.narration);
-      const hash = crypto.createHash('sha1').update(provider.name + provider.voice + spoken.text).digest('hex').slice(0, 16);
-      const wav = path.join(dir, `${scene.id}.wav`);
-      const metaFile = path.join(dir, `${scene.id}.json`);
-      if (fs.existsSync(wav) && fs.existsSync(metaFile) && readJson(metaFile, AudioMetaSchema).hash === hash) continue;
-      const raw = path.join(dir, `${scene.id}.raw.wav`);
-      await provider.synthesize(spoken.text, raw);
-      // Normalize every clip to 48 kHz mono so the merge step works on uniform inputs.
-      const { runOk } = await import('../core/exec.js');
-      await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-ar', '48000', '-ac', '1', wav + '.tmp.wav']);
-      fs.renameSync(wav + '.tmp.wav', wav);
-      fs.rmSync(raw, { force: true });
-      writeJson(metaFile, { hash, provider: provider.name, voice: provider.voice, license: provider.license, spoken });
-      ctx.progress((i + 1) / s.scenes.length, scene.id);
-      ctx.log.info(`${scene.id}: ${(await probeDuration(wav)).toFixed(1)} s`);
+    const todo = s.scenes
+      .map((scene) => {
+        const spoken = toSpoken(scene.narration);
+        const hash = crypto.createHash('sha1').update(provider.name + provider.voice + spoken.text).digest('hex').slice(0, 16);
+        const wav = path.join(dir, `${scene.id}.wav`);
+        const metaFile = path.join(dir, `${scene.id}.json`);
+        const cached = fs.existsSync(wav) && fs.existsSync(metaFile) && readJson(metaFile, AudioMetaSchema).hash === hash;
+        return { scene, spoken, hash, wav, metaFile, raw: path.join(dir, `${scene.id}.raw.wav`), cached };
+      })
+      .filter((x) => !x.cached);
+    if (todo.length) {
+      // One process for all scenes: the voice model loads once instead of once per scene.
+      if (provider.synthesizeBatch) await provider.synthesizeBatch(todo.map((x) => ({ text: x.spoken.text, out: x.raw })));
+      else for (const x of todo) await provider.synthesize(x.spoken.text, x.raw);
+      // Normalize every clip to 48 kHz mono (in parallel) so the merge step works on uniform inputs.
+      let done = 0;
+      await mapLimit(todo, Math.max(2, os.cpus().length), async (x) => {
+        await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', x.raw, '-ar', '48000', '-ac', '1', x.wav + '.tmp.wav']);
+        fs.renameSync(x.wav + '.tmp.wav', x.wav);
+        fs.rmSync(x.raw, { force: true });
+        writeJson(x.metaFile, { hash: x.hash, provider: provider.name, voice: provider.voice, license: provider.license, spoken: x.spoken });
+        ctx.progress(++done / todo.length, x.scene.id);
+      });
+      ctx.log.info(`${todo.length} clip(s) synthesized, ${s.scenes.length - todo.length} cached`);
     }
     writeJson(ctx.file('audio/manifest.json'), { provider: provider.name, voice: provider.voice, license: provider.license, scenes: s.scenes.map((x) => x.id) });
   },
 };
+
+/** Runs `fn` over `items` with at most `limit` in flight. */
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) await fn(items[next++]);
+  }));
+}
 
 /* 05 ------------------------------------------------------------------ */
 const align: Stage = {
@@ -201,47 +220,54 @@ const align: Stage = {
     const reel = s.format === 'portrait';
     const lead = 0.25;
     const tail = reel ? 0.35 : 0.7;
-    let whisperOk = ctx.cfg.aligner === 'whisper';
-    let t = 0;
-    const scenes: Timing['scenes'] = [];
-    for (const [i, scene] of s.scenes.entries()) {
-      const wav = ctx.file(`audio/${scene.id}.wav`);
-      const meta = readJson(ctx.file(`audio/${scene.id}.json`), AudioMetaSchema);
-      const spoken = meta.spoken as Spoken;
-      const dur = await probeDuration(wav);
-      const { lead: sl, trail: st } = await silenceBounds(wav);
-      let words = null;
-      let method: 'whisper' | 'proportional' = 'proportional';
-      if (whisperOk) {
-        try {
-          // Never prompt Whisper with the script itself: it then tends to skip ahead and transcribe only the end.
-          // First pass without a prompt; if the match is poor, retry with a vocabulary hint of unusual words only.
-          words = alignToScript(spoken, await whisperWords(ctx.cfg.tts.python, ctx.cfg.whisperModel, wav, ''));
-          if (!words) {
-            const vocab = [...new Set(scene.narration.match(/\b[\w.-]*[A-Z_.][\w.-]*\b/g) ?? [])].slice(0, 20).join(', ');
-            words = alignToScript(spoken, await whisperWords(ctx.cfg.tts.python, ctx.cfg.whisperModel, wav, vocab));
-          }
-          if (words) method = 'whisper';
-          else ctx.log.warn(`${scene.id}: Whisper timings looked unreliable; using proportional timings.`);
-        } catch (err) {
-          whisperOk = false;
-          ctx.log.warn(`Whisper alignment unavailable (${(err as Error).message.split('\n')[0].slice(0, 120)}); using proportional timings.`);
+    const clips = await Promise.all(
+      s.scenes.map(async (scene) => {
+        const wav = ctx.file(`audio/${scene.id}.wav`);
+        const spoken = readJson(ctx.file(`audio/${scene.id}.json`), AudioMetaSchema).spoken as Spoken;
+        const [dur, bounds] = await Promise.all([probeDuration(wav), silenceBounds(wav)]);
+        return { scene, wav, spoken, dur, bounds };
+      }),
+    );
+    // Whisper runs once for all clips (model loaded once). Never prompt it with the script itself: it then
+    // tends to skip ahead. Clips that align poorly get one retry with a vocabulary hint of unusual words only.
+    const aligned = new Map<string, WordTiming[]>();
+    if (ctx.cfg.aligner === 'whisper') {
+      try {
+        const first = await whisperBatch(ctx.cfg.tts.python, ctx.cfg.whisperModel, clips.map((c) => ({ wav: c.wav, prompt: '' })));
+        for (const c of clips) {
+          const w = alignToScript(c.spoken, first.get(c.wav) ?? []);
+          if (w) aligned.set(c.scene.id, w);
         }
+        const retry = clips.filter((c) => !aligned.has(c.scene.id));
+        if (retry.length) {
+          const vocab = (n: string) => [...new Set(n.match(/\b[\w.-]*[A-Z_.][\w.-]*\b/g) ?? [])].slice(0, 20).join(', ');
+          const second = await whisperBatch(ctx.cfg.tts.python, ctx.cfg.whisperModel, retry.map((c) => ({ wav: c.wav, prompt: vocab(c.scene.narration) })));
+          for (const c of retry) {
+            const w = alignToScript(c.spoken, second.get(c.wav) ?? []);
+            if (w) aligned.set(c.scene.id, w);
+            else ctx.log.warn(`${c.scene.id}: Whisper timings looked unreliable; using proportional timings.`);
+          }
+        }
+      } catch (err) {
+        ctx.log.warn(`Whisper alignment unavailable (${(err as Error).message.split('\n')[0].slice(0, 120)}); using proportional timings.`);
       }
-      if (!words) words = proportionalTimings(spoken.written, sl, Math.max(sl + 0.5, dur - st));
-      const durationSec = Math.ceil((lead + dur + tail) * FPS) / FPS;
-      scenes.push({
-        id: scene.id,
-        audioFile: `audio/${scene.id}.wav`,
-        startSec: Math.round(t * 1000) / 1000,
-        speechSec: Math.round(dur * 1000) / 1000,
-        durationSec,
-        alignment: method,
-        words: words.map((w) => ({ ...w, start: w.start + lead, end: w.end + lead })),
-      });
-      t += durationSec;
-      ctx.progress((i + 1) / s.scenes.length, scene.id);
     }
+    let t = 0;
+    const scenes: Timing['scenes'] = clips.map((c) => {
+      const words = aligned.get(c.scene.id) ?? proportionalTimings(c.spoken.written, c.bounds.lead, Math.max(c.bounds.lead + 0.5, c.dur - c.bounds.trail));
+      const durationSec = Math.ceil((lead + c.dur + tail) * FPS) / FPS;
+      const entry = {
+        id: c.scene.id,
+        audioFile: `audio/${c.scene.id}.wav`,
+        startSec: Math.round(t * 1000) / 1000,
+        speechSec: Math.round(c.dur * 1000) / 1000,
+        durationSec,
+        alignment: aligned.has(c.scene.id) ? ('whisper' as const) : ('proportional' as const),
+        words: words.map((w) => ({ ...w, start: w.start + lead, end: w.end + lead })),
+      };
+      t += durationSec;
+      return entry;
+    });
     writeJson(ctx.file('timing.json'), TimingSchema.parse({ fps: FPS, totalSec: Math.round(t * 1000) / 1000, scenes }));
     ctx.log.info(`total ${t.toFixed(1)} s (${(t / 60).toFixed(1)} min); alignment: ${[...new Set(scenes.map((x) => x.alignment))].join(', ')}`);
   },

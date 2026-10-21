@@ -50,6 +50,8 @@ export class OllamaProvider implements LlmProvider {
       body: JSON.stringify({
         model: this.model,
         stream: false,
+        // Keep the model in memory for the whole video instead of reloading it between scenes.
+        keep_alive: '30m',
         format: o.json ? 'json' : undefined,
         options: { temperature: o.temperature ?? 0.4, num_predict: o.maxTokens ?? 1200, num_ctx: 8192 },
         messages: [

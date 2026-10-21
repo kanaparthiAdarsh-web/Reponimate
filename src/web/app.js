@@ -189,6 +189,7 @@ async function openJob(id) {
 async function renderDetail(id) {
   const j = await api(`/api/jobs/${encodeURIComponent(id)}`);
   const file = (f) => `/files/${encodeURIComponent(j.id)}/${encodeURIComponent(f)}`;
+  const dl = (f, label) => `<a class="btn ghost dl" href="${file(f)}?download=1" download>⬇ ${esc(label)}</a>`;
   const has = (f) => j.files.includes(f);
   const m = j.metadata;
   const q = j.quality;
@@ -197,11 +198,15 @@ async function renderDetail(id) {
       <div class="actions">${j.status === 'failed' || j.status === 'incomplete' ? '<button class="btn ghost" id="resume">Resume from cache</button>' : ''}</div></div>
     ${j.error ? `<div class="error">${esc(j.error)}</div>` : ''}
     ${has('final.mp4') ? `<video controls preload="metadata" src="${file('final.mp4')}" ${has('thumbnail.png') ? `poster="${file('thumbnail.png')}"` : ''}></video>` : `<p class="muted">Stage: ${esc(j.stage ?? 'waiting')} — ${jobProgress(j)}%</p>`}
+    ${has('final.mp4') || has('thumbnail.png') ? `<div class="actions downloads">${[
+      has('final.mp4') && dl('final.mp4', 'Video (MP4)'),
+      has('thumbnail.png') && dl('thumbnail.png', 'Thumbnail (PNG)'),
+    ].filter(Boolean).join('')}</div>` : ''}
     <div class="grid2">
-      ${m ? `<div class="box"><h3>Titles</h3><pre>${esc(m.titles.join('\n'))}</pre></div>
+      ${m ? `<div class="box"><h3>Titles <button class="btn ghost copy" data-copy="titles">Copy</button></h3><pre id="titles">${esc(m.titles.join('\n'))}</pre></div>
       <div class="box"><h3>Description <button class="btn ghost copy" data-copy="desc">Copy</button></h3><pre id="desc">${esc(m.description)}</pre></div>
       <div class="box"><h3>Tags <button class="btn ghost copy" data-copy="tags">Copy</button></h3><pre id="tags">${esc(m.tags.join(', '))}</pre></div>` : ''}
-      ${has('thumbnail.png') ? `<div class="box"><h3>Thumbnail</h3><img class="thumb" src="${file('thumbnail.png')}" alt="thumbnail" /></div>` : ''}
+      ${has('thumbnail.png') ? `<div class="box"><h3>Thumbnail <a class="btn ghost copy" href="${file('thumbnail.png')}?download=1" download>⬇ Download</a></h3><img class="thumb" src="${file('thumbnail.png')}" alt="thumbnail" /></div>` : ''}
       ${q ? `<div class="box"><h3>Quality report ${q.ok ? '✅' : '⚠️'}</h3><ul class="checks">${q.checks.map((c) => `<li class="${c.ok ? 'ok' : 'no'}">${c.ok ? '✓' : '!'} ${esc(c.name)} — <span class="muted">${esc(c.detail)}</span></li>`).join('')}</ul></div>` : ''}
       <div class="box"><h3>Files</h3><div class="files">${j.files.map((f) => `<a href="${file(f)}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div></div>
       <div class="box wide"><h3>Log</h3><div class="logs" id="logs">${j.logs.map(logLine).join('')}</div></div>
@@ -211,7 +216,15 @@ async function renderDetail(id) {
     openJob(j.id);
   });
   document.querySelectorAll('[data-copy]').forEach((b) =>
-    b.addEventListener('click', () => navigator.clipboard?.writeText($('#' + b.dataset.copy).textContent)),
+    b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('#' + b.dataset.copy).textContent);
+        b.textContent = 'Copied ✓';
+      } catch {
+        b.textContent = 'Select & copy';
+      }
+      setTimeout(() => (b.textContent = 'Copy'), 1500);
+    }),
   );
 }
 

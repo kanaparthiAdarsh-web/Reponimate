@@ -164,6 +164,8 @@ app.get('/files/:id/:file', (req, res) => {
   if (!j) return void res.status(404).end();
   const file = path.resolve(j.dir, req.params.file);
   if (!file.startsWith(path.resolve(j.dir) + path.sep) || !fs.existsSync(file)) return void res.status(404).end();
+  // ?download=1 sends it as an attachment so the browser saves it instead of opening it.
+  if (req.query.download) return void res.download(file, `${j.id}-${path.basename(file)}`);
   res.sendFile(file);
 });
 
