@@ -339,6 +339,14 @@ describe('local web server', () => {
     expect((await fetch(`${base}/files/job1/job.json`)).status).toBe(200);
   });
 
+  it('offers files as downloads, still confined to the job folder', async () => {
+    const r = await fetch(`${base}/files/job1/job.json?download=1`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-disposition')).toMatch(/attachment; filename="job1-job.json"/);
+    const bad = await fetch(`${base}/files/job1/..%2Fsecret.txt?download=1`);
+    expect(await bad.text()).not.toContain('outside the job dir');
+  });
+
   it('blocks DNS rebinding (foreign Host header)', async () => {
     const http = await import('node:http');
     const status = await new Promise<number>((resolve) => {

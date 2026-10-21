@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,6 +37,7 @@ export interface AppConfig {
     anthropicKey: string;
     anthropicModel: string;
     timeoutMs: number;
+    parallel: number;
   };
   tts: {
     provider: TtsProviderName;
@@ -100,7 +102,9 @@ export function loadConfig(): AppConfig {
       ollamaEmbedModel: env('OLLAMA_EMBED_MODEL', 'nomic-embed-text'),
       anthropicKey: env('ANTHROPIC_API_KEY'),
       anthropicModel: env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
-      timeoutMs: Number(env('LLM_TIMEOUT_MS', '180000')),
+      timeoutMs: Number(env('LLM_TIMEOUT_MS', '300000')),
+      // Scenes written at the same time. Ollama queues extra requests, so this never hurts; with a GPU it overlaps work.
+      parallel: Math.max(1, Number(env('LLM_PARALLEL', '2'))),
     },
     tts: {
       provider: env('TTS_PROVIDER', 'auto') as TtsProviderName,
@@ -116,7 +120,8 @@ export function loadConfig(): AppConfig {
     whisperModel: env('WHISPER_MODEL', 'base.en'),
     render: {
       browserExecutable: env('BROWSER_EXECUTABLE') || detectBrowser(),
-      concurrency: Number(env('RENDER_CONCURRENCY', '4')),
+      // One Chromium tab per ~1.3 cores (each tab also uses the GPU/encoder); "auto" scales with the machine.
+      concurrency: env('RENDER_CONCURRENCY', 'auto') === 'auto' ? Math.max(2, Math.min(12, Math.round(os.cpus().length * 0.75))) : Number(env('RENDER_CONCURRENCY')),
       // 'angle' was ~5x faster than 'swangle' on a CPU-only Linux box; use 'swiftshader' or 'egl' if angle fails on yours.
       gl: env('RENDER_GL', 'angle'),
       music: env('MUSIC', 'auto'),

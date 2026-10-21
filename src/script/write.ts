@@ -98,6 +98,7 @@ export async function writeScript(opts: {
   index: KnowledgeIndex;
   llm: LlmProvider | null;
   log: Logger;
+  parallel?: number;
 }): Promise<Script> {
   const { plans, index, llm, log } = opts;
   const byId = index.byId;
@@ -105,7 +106,13 @@ export async function writeScript(opts: {
   const scenes: Scene[] = [];
   const reel = opts.mode === 'doc-reel';
 
-  for (const [idx, plan] of plans.entries()) {
+  // Scenes are independent (each gets its own retrieval and verification), so they can be written concurrently.
+  const results: (Scene | undefined)[] = new Array(plans.length);
+  let nextIdx = 0;
+  const worker = async (): Promise<void> => {
+  while (nextIdx < plans.length) {
+    const idx = nextIdx++;
+    const plan = plans[idx];
     const hits = (await index.search(plan.query, 6, (c) => c.sourceId !== 'analysis')).map((h) => h.chunk);
     const evidenceChunks = index.kb.chunks.filter((c) =>
       plan.evidence.some((e) => e.sourceId === c.sourceId && e.path === c.path && e.startLine <= c.endLine && e.endLine >= c.startLine),
@@ -167,7 +174,7 @@ export async function writeScript(opts: {
     }
 
     const words = result.narration.split(/\s+/).length;
-    scenes.push({
+    results[idx] = ({
       id: plan.id,
       type: plan.type,
       title: plan.title,
@@ -187,6 +194,9 @@ export async function writeScript(opts: {
       },
     });
   }
+  };
+  await Promise.all(Array.from({ length: Math.min(opts.parallel ?? 1, plans.length) }, worker));
+  scenes.push(...(results as Scene[]));
   return {
     mode: opts.mode,
     format: opts.format,

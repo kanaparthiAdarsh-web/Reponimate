@@ -70,6 +70,8 @@ video { width: 100%; border-radius: 12px; background: #000; margin: 14px 0; max-
 .logs { font-family: ui-monospace, monospace; font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; color: var(--muted); }
 .logs .warn { color: var(--orange); } .logs .error { color: var(--red); } .logs .step { color: var(--cyan); font-weight: 700; }
 .files a { color: var(--cyan); margin-right: 10px; font-size: 13px; display: inline-block; }
-.copy { float: right; font-size: 12px; padding: 4px 8px; }
+.copy { float: right; font-size: 12px; padding: 4px 8px; text-decoration: none; }
+.downloads { margin: 0 0 16px; }
+.btn.dl { text-decoration: none; font-size: 14px; padding: 9px 14px; }
 img.thumb { width: 100%; border-radius: 10px; }
 footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 16px; }

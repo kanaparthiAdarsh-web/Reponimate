@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from '../core/config.js';
 import { runOk } from '../core/exec.js';
@@ -15,6 +16,18 @@ const norm = (w: string): string => w.toLowerCase().replace(/[^a-z0-9]/g, '');
 export async function whisperWords(python: string, model: string, wav: string, prompt: string): Promise<RecognizedWord[]> {
   const out = await runOk(python, [path.join(ROOT, 'python', 'align_whisper.py'), model, wav], { input: prompt, timeoutMs: 600_000 });
   return JSON.parse(out) as RecognizedWord[];
+}
+
+/** Transcribes many clips in one process so the Whisper model loads once. */
+export async function whisperBatch(python: string, model: string, jobs: { wav: string; prompt: string }[]): Promise<Map<string, RecognizedWord[]>> {
+  const file = path.join(path.dirname(jobs[0].wav), `align-jobs-${process.pid}.json`);
+  fs.writeFileSync(file, JSON.stringify(jobs), 'utf8');
+  try {
+    const out = await runOk(python, [path.join(ROOT, 'python', 'align_whisper.py'), model, '--batch', file], { timeoutMs: 3_600_000 });
+    return new Map(Object.entries(JSON.parse(out) as Record<string, RecognizedWord[]>));
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
 }
 
 /** Distributes [start, end] across words by character length, with extra weight for punctuation pauses. */
