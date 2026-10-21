@@ -13,10 +13,14 @@ export function tokenize(text: string): string[] {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .toLowerCase()
-    .split(/[^a-z0-9]+/);
+    // Unicode-aware: Telugu, Hindi, Cyrillic… words must count as content, or non-English text would skip verification.
+    .split(/[^\p{L}\p{M}\p{N}]+/u);
   for (const w of raw) {
-    if (w.length < 2 || STOP.has(w) || /^\d+$/.test(w)) continue;
-    out.push(stem(w));
+    if (!w || STOP.has(w) || /^\d+$/.test(w)) continue;
+    if (/^[a-z0-9]+$/.test(w)) {
+      if (w.length < 2) continue;
+      out.push(stem(w));
+    } else out.push(w);
   }
   return out;
 }

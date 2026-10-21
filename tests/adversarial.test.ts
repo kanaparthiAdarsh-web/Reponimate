@@ -212,6 +212,28 @@ describe('prompt injection', () => {
     expect(narration).not.toMatch(/best library|millions|genius/i);
   });
 
+  it('verifies non-English sentences instead of waving them through', () => {
+    const doc: Chunk = { id: 'c1', sourceId: 'd', path: 'doc', startLine: 1, endLine: 1, kind: 'doc', text: 'కిరణజన్య సంయోగక్రియ మొక్కలలో జరుగుతుంది.' };
+    expect(checkSupport('కిరణజన్య సంయోగక్రియ మొక్కలలో జరుగుతుంది.', [doc]).supported).toBe(true);
+    expect(checkSupport('ఈ లైబ్రరీ ప్రపంచంలో అత్యంత వేగవంతమైనది.', [doc]).supported).toBe(false);
+    expect(checkSupport('Эта библиотека работает на Марсе.', [doc]).supported).toBe(false);
+  });
+
+  it('rejects small invented numbers even when the digit appears elsewhere in the evidence', () => {
+    const readme: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 1, kind: 'doc', text: 'It handles most major languages, including German, Vietnamese, Arabic and Russian.' };
+    const code: Chunk = { id: 'c2', sourceId: 'repo', path: 'index.js', startLine: 1, endLine: 1, kind: 'code', text: 'const indent = 4;' };
+    expect(checkSupport('It handles most major languages, including German and Russian.', [readme, code]).supported).toBe(true);
+    // Real output from qwen2.5:3b during testing — previously passed verification:
+    expect(checkSupport('It supports up to 4 major languages, including German, Vietnamese, Arabic, Russian.', [readme, code]).supported).toBe(false);
+    expect(checkSupport('It supports four major languages, including German and Russian.', [readme, code]).supported).toBe(false);
+  });
+
+  it('catches negation flips', () => {
+    const c: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 1, kind: 'doc', text: 'safequeue supports Windows, macOS and Linux.' };
+    expect(checkSupport('safequeue supports Windows and Linux.', [c]).supported).toBe(true);
+    expect(checkSupport('safequeue does not support Windows.', [c]).supported).toBe(false);
+  });
+
   it('marketing words from the README are only allowed with attribution', () => {
     const readme: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 3, kind: 'doc', text: 'safequeue is the fastest queue for Node.' };
     expect(checkSupport('safequeue is the fastest queue for Node.', [readme]).supported).toBe(false);
@@ -245,6 +267,17 @@ describe('alignment edge cases', () => {
   });
   it('pronunciation never throws on emoji, RTL or symbols', () => {
     expect(() => toSpoken('🚀 مرحبا ← C++ & C# `x` () [] {} @scope/pkg ...')).not.toThrow();
+  });
+});
+
+describe('trending autopilot safety', () => {
+  it('skips biographies and entertainment pages', async () => {
+    const { isPersonOrEntertainment } = await import('../src/trending/trending.js');
+    expect(isPersonOrEntertainment('American businesswoman (born 1984)')).toBe(true);
+    expect(isPersonOrEntertainment('2026 film directed by Nelson')).toBe(true);
+    expect(isPersonOrEntertainment('Supreme Leader of North Korea since 2011, politician')).toBe(true);
+    expect(isPersonOrEntertainment('Process used by plants to convert light into energy')).toBe(false);
+    expect(isPersonOrEntertainment('Solar eclipse of October 2026')).toBe(false);
   });
 });
 

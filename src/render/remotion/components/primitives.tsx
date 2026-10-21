@@ -133,10 +133,14 @@ export const Captions: React.FC<{ words: WordTiming[]; maxWords: number; layout:
           const active = t >= w.start && t <= w.end + 0.08;
           const key = w.text.toLowerCase().replace(/[^\w]/g, '');
           const color = active ? theme.cyan : emph.has(key) ? theme.orange : theme.text;
+          // Real space characters between words: margins collapse or get covered by highlighted words.
           return (
-            <span key={i} style={{ color, display: 'inline-block', transform: active && big ? 'scale(1.08)' : undefined, marginRight: '0.28em' }}>
-              {big ? w.text.toUpperCase() : w.text}
-            </span>
+            <React.Fragment key={i}>
+              {i > 0 && ' '}
+              <span style={{ color, textDecoration: active && big ? 'underline' : undefined, textDecorationThickness: 6, textUnderlineOffset: 10 }}>
+                {big ? w.text.toUpperCase() : w.text}
+              </span>
+            </React.Fragment>
           );
         })}
       </div>

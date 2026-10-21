@@ -45,7 +45,8 @@ export async function runOk(cmd: string, args: string[], opts: Parameters<typeof
 
 export async function commandExists(cmd: string): Promise<boolean> {
   try {
-    const r = await run(cmd, ['--version'], { timeoutMs: 10_000 });
+    // ffmpeg/ffprobe only understand "-version"; most other tools use "--version".
+    const r = await run(cmd, [/^ff(mpeg|probe)$/.test(cmd) ? '-version' : '--version'], { timeoutMs: 10_000 });
     return r.code === 0 || r.stdout.length > 0;
   } catch {
     return false;

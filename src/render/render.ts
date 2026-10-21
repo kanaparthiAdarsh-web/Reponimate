@@ -73,9 +73,11 @@ export async function renderVideo(o: {
 
   if (!o.chunk) {
     let last = -1;
+    // Render to a temp file and rename: an interrupted render must never look like a finished one.
+    const tmpOut = o.outFile.replace(/\.mp4$/, '.partial.mp4');
     await renderMedia({
       ...common,
-      outputLocation: o.outFile,
+      outputLocation: tmpOut,
       onProgress: ({ progress }) => {
         o.onProgress?.(progress);
         const pct = Math.floor(progress * 10);
@@ -85,6 +87,7 @@ export async function renderVideo(o: {
         }
       },
     });
+    fs.renameSync(tmpOut, o.outFile);
     return;
   }
 
@@ -102,5 +105,7 @@ export async function renderVideo(o: {
   }
   const list = path.join(o.workDir, 'chunks.txt');
   fs.writeFileSync(list, parts.map((p) => `file '${path.basename(p)}'`).join('\n'));
-  await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', o.outFile], { cwd: o.workDir });
+  const joined = o.outFile.replace(/\.mp4$/, '.partial.mp4');
+  await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined], { cwd: o.workDir });
+  fs.renameSync(joined, o.outFile);
 }

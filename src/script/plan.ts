@@ -335,7 +335,7 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
 /** 9:16 short: hook, three punchy points, payoff. Targets 35-55 seconds of speech. */
 export function planDocReel(a: DocAnalysis): ScenePlan[] {
   const points = a.sections
-    .flatMap((s) => s.keyPoints.slice(0, 1).map((k) => ({ heading: s.heading, k })))
+    .flatMap((s) => s.keyPoints.filter((k) => k.text !== a.summary.text).slice(0, 1).map((k) => ({ heading: s.heading, k })))
     .slice(0, 3);
   const plans: ScenePlan[] = [
     {
@@ -359,7 +359,7 @@ export function planDocReel(a: DocAnalysis): ScenePlan[] {
       query: `${p.heading} ${p.k.text}`,
       brief: `One or two short sentences explaining "${p.heading}". Max 30 words. Only facts from the material.`,
       extractive: sentence(p.k.text),
-      visual: { headline: `${i + 1}. ${short(p.heading, 28)}`, stickman: { pose: POSES[i % POSES.length], board: [short(p.k.text, 46)] } },
+      visual: { headline: `${i + 1}. ${short(p.heading, 28)}`, stickman: { pose: POSES[i % POSES.length], board: [short(p.k.text, 110)] } },
       visualDescription: 'Stick figure with a board showing the point.',
       evidence: p.k.evidence,
       targetWords: 28,

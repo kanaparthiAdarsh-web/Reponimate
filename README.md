@@ -109,6 +109,15 @@ These are the measures that keep the narration from making things up. Each one h
 3. **Retrieval is restricted.** The writer sees only retrieved chunks, wrapped in `<data>` fences, and is told to ignore any instructions inside them. Chunks that look like prompt injection are withheld, and fence-breaking text is neutralised.
 4. **Every sentence is verified.** Identifiers, file names and numbers must appear in the evidence, and enough content words must be covered by it. Marketing claims ("fastest", "millions") need source support *and* attribution ("the README claims…"). Everything that fails is dropped and logged in `quality-report.json`.
 5. **It never claims tests pass.** Repository code is never executed, and the narration and report say so.
+6. **Verification works in any language, and negation must match.** Telugu, Hindi and Cyrillic sentences are checked like English ones. "Does *not* support X" is rejected when the source only says it supports X.
+
+### Known limitations (honest list)
+
+- The sentence verifier is lexical, not a full reasoning model. It catches invented names, numbers, hype, off-topic claims and negation flips. It can still miss a sentence that uses only source words but swaps their relationship ("A calls B" when the source says "B calls A"). Watch the video before publishing.
+- Import graphs and symbols come from regex-based static parsing for JS/TS, Python, Go, Rust, Ruby and Java. Unusual module systems may produce an incomplete diagram.
+- Default voices are English. eSpeak NG covers many languages (set `ESPEAK_VOICE`), but its quality is basic.
+- Small models (3B) often fail verification on a scene. That scene then falls back to extractive narration, which stays correct but is plainer. A 7B+ model gives livelier scripts.
+- Rendering is CPU-bound. On an 8-core machine, expect roughly 1–2× the video length at full HD. Use `--preview` while iterating.
 
 ### Rust and TypeScript
 

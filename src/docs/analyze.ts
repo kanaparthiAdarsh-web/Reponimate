@@ -122,7 +122,8 @@ export function analyzeDocs(docs: LoadedDoc[], titleOverride?: string): { analys
     return { heading, chunkIds: [], keyPoints: ranked.map((r) => claimOf(r.s)) };
   });
 
-  const first = allSentences.flat()[0];
+  const lead = docs.flatMap((d) => sentencesWithLines(d.text, d.source.id, d.source.title))[0];
+  const first = lead ?? allSentences.flat()[0];
   if (!first) throw new UserError('No readable sentences were found in the material (only code, tables or very short lines?).');
   const title = titleOverride || docs[0].source.title;
   const allText = docs.map((d) => d.text).join('\n');

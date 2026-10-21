@@ -144,9 +144,11 @@ async function refreshJobs() {
       (j) => `<div class="job" data-id="${esc(j.id)}">
         <div><div class="name">${esc(j.label)}</div><div class="meta">${MODE_LABEL[j.mode] ?? j.mode} · ${new Date(j.createdAt).toLocaleString()}${j.stage && j.status === 'running' ? ` · ${esc(j.stage)}` : ''}</div></div>
         <span class="badge ${j.status}">${j.status}</span>
-        <div class="bar"><i style="width:${jobProgress(j)}%"></i></div></div>`,
+        <div class="bar"><i data-progress="${jobProgress(j)}"></i></div></div>`,
     )
     .join('');
+  // The CSP forbids inline style attributes, so widths are applied through the CSSOM.
+  el.querySelectorAll('[data-progress]').forEach((i) => (i.style.width = `${i.dataset.progress}%`));
   el.querySelectorAll('.job').forEach((d) => d.addEventListener('click', () => openJob(d.dataset.id)));
 }
 
@@ -191,7 +193,7 @@ async function renderDetail(id) {
   const q = j.quality;
   $('#detail').innerHTML = `
     <div class="detail-head"><h2>${esc(j.label)} <span class="badge ${j.status}">${j.status}</span></h2>
-      <div class="actions">${j.status === 'failed' ? '<button class="btn ghost" id="resume">Resume from cache</button>' : ''}</div></div>
+      <div class="actions">${j.status === 'failed' || j.status === 'incomplete' ? '<button class="btn ghost" id="resume">Resume from cache</button>' : ''}</div></div>
     ${j.error ? `<div class="error">${esc(j.error)}</div>` : ''}
     ${has('final.mp4') ? `<video controls preload="metadata" src="${file('final.mp4')}" ${has('thumbnail.png') ? `poster="${file('thumbnail.png')}"` : ''}></video>` : `<p class="muted">Stage: ${esc(j.stage ?? 'waiting')} — ${jobProgress(j)}%</p>`}
     <div class="grid2">
@@ -201,7 +203,7 @@ async function renderDetail(id) {
       ${has('thumbnail.png') ? `<div class="box"><h3>Thumbnail</h3><img class="thumb" src="${file('thumbnail.png')}" alt="thumbnail" /></div>` : ''}
       ${q ? `<div class="box"><h3>Quality report ${q.ok ? '✅' : '⚠️'}</h3><ul class="checks">${q.checks.map((c) => `<li class="${c.ok ? 'ok' : 'no'}">${c.ok ? '✓' : '!'} ${esc(c.name)} — <span class="muted">${esc(c.detail)}</span></li>`).join('')}</ul></div>` : ''}
       <div class="box"><h3>Files</h3><div class="files">${j.files.map((f) => `<a href="${file(f)}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div></div>
-      <div class="box" style="grid-column:1/-1"><h3>Log</h3><div class="logs" id="logs">${j.logs.map(logLine).join('')}</div></div>
+      <div class="box wide"><h3>Log</h3><div class="logs" id="logs">${j.logs.map(logLine).join('')}</div></div>
     </div>`;
   $('#resume')?.addEventListener('click', async () => {
     await api(`/api/jobs/${encodeURIComponent(j.id)}/resume`, {});

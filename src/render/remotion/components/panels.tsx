@@ -108,8 +108,13 @@ export const ArchitectureDiagram: React.FC<{ graph: Graph; words: WordTiming[]; 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const pos = layoutGraph(graph, width, height, layout.portrait);
-  const nodeW = layout.portrait ? 300 : 280;
-  const nodeH = 76;
+  // Size boxes to the longest label (monospace ≈ 0.6em per char), within what the layers allow.
+  const longest = Math.max(6, ...graph.nodes.map((n) => Math.min(24, n.label.length)));
+  const layers = new Set([...pos.values()].map((p) => (layout.portrait ? p.y : p.x))).size || 1;
+  const maxW = (layout.portrait ? width : width / layers) - 40;
+  const fontPx = Math.max(18, Math.min(28, (maxW - 36) / (longest * 0.6)));
+  const nodeW = Math.min(maxW, longest * fontPx * 0.6 + 40);
+  const nodeH = fontPx * 2.6;
   const order = graph.nodes.map((n) => n.id);
   const appear = (id: string): number => revealFrame(order.indexOf(id), order.length + 2, words, fps, 0.3);
   return (
@@ -157,7 +162,7 @@ export const ArchitectureDiagram: React.FC<{ graph: Graph; words: WordTiming[]; 
         return (
           <g key={n.id} transform={`translate(${p0.x - nodeW / 2} ${p0.y - nodeH / 2}) scale(${s})`} style={{ transformOrigin: `${nodeW / 2}px ${nodeH / 2}px`, transformBox: 'fill-box' }} opacity={s}>
             <rect width={nodeW} height={nodeH} rx={16} fill={ext ? '#2A1A0F' : theme.panel} stroke={ext ? theme.orange : theme.cyan} strokeWidth={3} />
-            <text x={nodeW / 2} y={nodeH / 2 + 10} textAnchor="middle" fontFamily={theme.mono} fontSize={n.label.length > 20 ? 22 : 27} fill={theme.text}>
+            <text x={nodeW / 2} y={nodeH / 2} textAnchor="middle" fontFamily={theme.mono} fontSize={fontPx} fill={theme.text} dominantBaseline="middle">
               {n.label.length > 24 ? '…' + n.label.slice(-23) : n.label}
             </text>
           </g>

@@ -27,6 +27,11 @@ export async function fetchRepo(
   };
   const safety = ['-c', 'core.hooksPath=/dev/null', '-c', 'protocol.file.allow=never', '-c', 'core.symlinks=true'];
 
+  // A cached clone of a moving branch goes stale; re-clone after an hour. Pinned commit SHAs never change.
+  const pinnedSha = Boolean(repo.ref && /^[0-9a-f]{40}$/.test(repo.ref));
+  if (!pinnedSha && fs.existsSync(path.join(dir, '.git')) && Date.now() - fs.statSync(path.join(dir, '.git')).mtimeMs > 3600_000) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
   if (!fs.existsSync(path.join(dir, '.git'))) {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(dir), { recursive: true });

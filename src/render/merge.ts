@@ -34,5 +34,6 @@ export async function mergeAudioVideo(o: { dir: string; timing: Timing; video: s
   filters.push(`[${last}]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[out]`);
   const mixed = path.join(o.dir, 'render', 'mix.m4a');
   await runOk('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', filters.join(';'), '-map', '[out]', '-ac', '2', '-c:a', 'aac', '-b:a', '192k', mixed], { timeoutMs: 1_800_000 });
-  await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', o.video, '-i', mixed, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'copy', '-shortest', '-movflags', '+faststart', o.out], { timeoutMs: 600_000 });
+  await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', o.video, '-i', mixed, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'copy', '-shortest', '-movflags', '+faststart', o.out + '.partial.mp4'], { timeoutMs: 600_000 });
+  fs.renameSync(o.out + '.partial.mp4', o.out);
 }

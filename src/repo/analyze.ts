@@ -260,7 +260,8 @@ export function analyzeRepo(repo: FetchedRepo, inv: Inventory): RepoAnalysisResu
     edges: [...edgeSet.values()].filter((e) => topNodes.includes(e.from) && topNodes.includes(e.to)).slice(0, 14),
   };
   // External libraries are part of the architecture story too.
-  const topExternal = [...graph.external.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const ownNames = new Set(manifests.map((m) => m.name).filter(Boolean));
+  const topExternal = [...graph.external.entries()].filter(([n]) => !ownNames.has(n)).sort((a, b) => b[1] - a[1]).slice(0, 4);
   if (importGraph.nodes.length && topExternal.length) {
     for (const [name] of topExternal) {
       importGraph.nodes.push({ id: `ext:${name}`, label: name, group: 'external' });

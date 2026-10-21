@@ -31,6 +31,7 @@ Options:
   --tts piper|kokoro|espeak              override TTS_PROVIDER
   --preview                              half-resolution fast render
   --chunk-render                         render in 20-second chunks (weak PCs; resumable)
+  --fresh                                delete cached results for this video and start over
   --allow-execution                      not supported: repository code is never executed
 `;
 
@@ -63,6 +64,11 @@ async function main(): Promise<void> {
   }
   const name = input.repoUrl ? input.repoUrl.replace(/^https:\/\/github\.com\//, '').replace('/', '-') : input.textTitle || input.topic || input.urls[0] || input.text?.slice(0, 40) || 'video';
   const dir = typeof flags.out === 'string' ? path.resolve(flags.out) : path.join(cfg.outDir, `${slugify(name)}-${mode}`);
+  if (flags.fresh) fs.rmSync(dir, { recursive: true, force: true });
+  else if (fs.existsSync(path.join(dir, 'job.json')) && !flags['resume-from']) {
+    const when = JSON.parse(fs.readFileSync(path.join(dir, 'job.json'), 'utf8')).createdAt;
+    console.log(`Reusing cached results from ${when}. Pass --fresh to start over or --resume-from <stage> to redo part of it.`);
+  }
   console.log(`Output: ${dir}`);
   const res = await runPipeline({
     cfg,

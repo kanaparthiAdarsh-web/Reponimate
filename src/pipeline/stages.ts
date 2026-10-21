@@ -171,7 +171,8 @@ const tts: Stage = {
       await provider.synthesize(spoken.text, raw);
       // Normalize every clip to 48 kHz mono so the merge step works on uniform inputs.
       const { runOk } = await import('../core/exec.js');
-      await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-ar', '48000', '-ac', '1', wav]);
+      await runOk('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-ar', '48000', '-ac', '1', wav + '.tmp.wav']);
+      fs.renameSync(wav + '.tmp.wav', wav);
       fs.rmSync(raw, { force: true });
       writeJson(metaFile, { hash, provider: provider.name, voice: provider.voice, license: provider.license, spoken });
       ctx.progress((i + 1) / s.scenes.length, scene.id);

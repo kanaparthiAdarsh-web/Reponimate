@@ -52,7 +52,7 @@ const StickScene: React.FC<{ scene: Scene; words: SceneTiming['words']; layout: 
   const figure = (
     <div style={{ position: 'relative' }}>
       {sm.speech && (
-        <div style={{ position: 'absolute', top: -70, left: figSize * 0.35, background: theme.board, color: theme.ink, fontFamily: theme.hand, fontSize: layout.unit * 1.1, padding: '12px 26px', borderRadius: 26, transform: `scale(${bubble})`, transformOrigin: 'bottom left', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'absolute', top: -120, left: figSize * 0.42, background: theme.board, color: theme.ink, fontFamily: theme.hand, fontSize: layout.unit * 1.1, padding: '12px 26px', borderRadius: 26, transform: `scale(${bubble})`, transformOrigin: 'bottom left', whiteSpace: 'nowrap' }}>
           {sm.speech}
         </div>
       )}

@@ -122,23 +122,26 @@ export async function writeScript(opts: {
             `On screen: ${plan.visualDescription}`,
             `Length: about ${plan.targetWords} words${reel ? ' (this is a vertical short — be punchy)' : ''}.`,
             plan.id !== plans[0].id ? 'Do not greet the viewer again; continue naturally from the previous scene.' : '',
-            `Return JSON: {"narration": "...", "emphasisWords": ["up to 4 key words from the narration"]}`,
+            `Return JSON: {"narration": "...", "emphasisWords": ["a few key words copied from your narration"]}`,
             '',
             dataBlocks(llmContext),
           ].join('\n'),
           temperature: 0.5,
           maxTokens: Math.max(400, plan.targetWords * 4),
         });
-        const v = verifyNarration(reply.narration, candidates, byId);
+        const v = verifyNarration(reply.narration.replace(/^[\s.…]+/, ''), candidates, byId);
         const words = v.narration.split(/\s+/).filter(Boolean).length;
-        if (v.kept >= (reel ? 1 : 2) && words >= plan.targetWords * 0.45) {
+        // Short but fully verified narration is better than none; only very thin results fall back.
+        if (v.kept >= (reel ? 1 : 2) && words >= plan.targetWords * 0.3) {
           result = v;
           usedLlm = true;
           emphasis = reply.emphasisWords.filter((w) => v.narration.toLowerCase().includes(w.toLowerCase())).slice(0, 4);
           if (v.dropped.length) log.warn(`${plan.id}: dropped ${v.dropped.length} unsupported sentence(s): "${v.dropped[0].slice(0, 80)}"`);
         } else {
           llmDropped = v.dropped;
-          log.warn(`${plan.id}: LLM narration failed verification (${v.dropped.length} unsupported sentences); using extractive narration.`);
+          log.warn(
+            `${plan.id}: LLM narration unusable (${v.kept} verified sentence(s), ${words} words, ${v.dropped.length} unsupported); using extractive narration.`,
+          );
         }
       } catch (err) {
         log.warn(`${plan.id}: LLM failed (${(err as Error).message.slice(0, 120)}); using extractive narration.`);

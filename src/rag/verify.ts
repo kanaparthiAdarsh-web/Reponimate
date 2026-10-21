@@ -23,6 +23,23 @@ export interface SupportResult {
   missingTerms: string[];
 }
 
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'twenty', 'hundred', 'thousand', 'million', 'billion'];
+
+/** Numbers stated in a sentence, as digits and as words ("4" ↔ "four"). "one" used as a pronoun is ignored. */
+export function numbersIn(sentence: string): { raw: string; digits?: string; word?: string }[] {
+  const out: { raw: string; digits?: string; word?: string }[] = [];
+  for (const m of sentence.matchAll(/(?<![\w.])\d[\d,]*(?:\.\d+)?(?![\w])/g)) {
+    const digits = m[0].replace(/,/g, '');
+    const i = Number(digits);
+    out.push({ raw: m[0], digits, word: Number.isInteger(i) && i < NUMBER_WORDS.length && i <= 12 ? NUMBER_WORDS[i] : undefined });
+  }
+  for (const m of sentence.toLowerCase().matchAll(/\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|hundred|thousand|million|billion)\b/g)) {
+    const idx = NUMBER_WORDS.indexOf(m[1]);
+    out.push({ raw: m[1], word: m[1], digits: idx <= 12 ? String(idx) : undefined });
+  }
+  return out;
+}
+
 export function splitSentences(text: string): string[] {
   // Split only where punctuation is followed by whitespace, so "index.js" or "v1.2" stay intact.
   return text
@@ -76,6 +93,24 @@ export function checkSupport(sentence: string, chunks: Chunk[], threshold = 0.5)
     .slice(0, 3)
     .map((x) => x.id);
   if (bestIdx >= 0 && !usedIds.includes(chunks[bestIdx].id)) usedIds.unshift(chunks[bestIdx].id);
+  // Negation flips meaning without changing vocabulary ("does not support X" vs "supports X").
+  const NEG = /\b(not|never|no|none|cannot|without|neither|nor)\b|n't\b/i;
+  const bestChunk = bestIdx >= 0 ? chunks[bestIdx] : undefined;
+  // Numbers (digits or words, any size) must appear in the chunks that actually support the sentence,
+  // not merely somewhere in the evidence ("4" exists in almost any code file).
+  const supporting = chunks
+    .map((c, i) => ({ c, cov: substantive.filter((t) => tokenSets[i].has(t)).length }))
+    .filter((x) => x.cov > 0)
+    .sort((a, b) => b.cov - a.cov)
+    .slice(0, 2)
+    .map((x) => `${x.c.path}\n${x.c.text}`.toLowerCase());
+  for (const n of numbersIn(sentence)) {
+    const forms = [n.digits, n.word].filter(Boolean) as string[];
+    const found = supporting.some((t) => forms.some((f) => new RegExp(`(^|[^0-9a-z.])${f.replace('.', '\\.')}([^0-9a-z]|$)`).test(t)));
+    if (!found && !missingTerms.includes(n.raw)) missingTerms.push(n.raw);
+  }
+  const negationMismatch = NEG.test(sentence) && !(bestChunk && NEG.test(bestChunk.text));
+  if (negationMismatch) missingTerms.push('(negation not found in the evidence)');
   return {
     supported: missingTerms.length === 0 && (substantive.length === 0 || score >= threshold),
     framing: false,

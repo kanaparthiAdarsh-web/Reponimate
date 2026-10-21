@@ -58,6 +58,13 @@ export async function hackerNews(limit = 30): Promise<{ title: string; url?: str
   return items.filter((x): x is { title: string; url?: string; score: number } => Boolean(x?.title));
 }
 
+const PERSON_OR_ENTERTAINMENT =
+  /\b(born \d{4}|\(born|\d{4}[–-]\d{4}\)|actor|actress|singer|rapper|musician|politician|footballer|cricketer|player|athlete|boxer|wrestler|businessman|businesswoman|entrepreneur|influencer|youtuber|model|presenter|comedian|director|producer|president of|prime minister|monarch|king|queen|prince|princess|film|television series|tv series|season \d|episode|album|song|video game|reality show|band)\b/i;
+
+export function isPersonOrEntertainment(description: string): boolean {
+  return PERSON_OR_ENTERTAINMENT.test(description);
+}
+
 /** Most-read Wikipedia articles yesterday (Wikimedia feed API). */
 export async function wikipediaMostRead(limit = 15): Promise<TrendingItem[]> {
   const d = new Date(Date.now() - 864e5);
@@ -67,6 +74,9 @@ export async function wikipediaMostRead(limit = 15): Promise<TrendingItem[]> {
   };
   return (j.mostread?.articles ?? [])
     .filter((a) => !/^(Main Page|Special:|Deaths in|List of|Wikipedia:)/.test(a.normalizedtitle))
+    // Explainers about living people risk false statements about real persons, and celebrity/entertainment
+    // pages make poor educational videos; keep concepts, science, technology, history and events.
+    .filter((a) => !isPersonOrEntertainment(a.description ?? ''))
     .slice(0, limit)
     .map((a) => ({
       label: a.normalizedtitle,

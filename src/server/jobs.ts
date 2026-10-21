@@ -9,7 +9,7 @@ import type { JobInput } from '../core/schemas.js';
 import { runPipeline } from '../pipeline/runner.js';
 import { STAGES } from '../pipeline/stages.js';
 
-export type JobStatus = 'queued' | 'running' | 'done' | 'failed';
+export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'incomplete';
 
 export interface Job {
   id: string;
@@ -53,11 +53,11 @@ export class JobManager {
           dir: path.join(this.cfg.outDir, name),
           input: st.input,
           label: st.input.repoUrl ?? st.input.textTitle ?? st.input.topic ?? name,
-          status: done ? 'done' : 'failed',
+          status: done ? 'done' : 'incomplete',
           stageIndex: done ? STAGES.length : 0,
           progress: done ? 1 : 0,
           logs: [],
-          error: done ? undefined : 'Interrupted or failed earlier — press Resume to continue from cache.',
+          error: done ? undefined : 'Not finished (stopped, failed, or still running from the CLI). Press Resume to continue from cache.',
           createdAt: st.createdAt,
         });
       } catch {
