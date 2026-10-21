@@ -28,7 +28,14 @@ class PiperTts implements TtsProvider {
     return path.basename(this.model, '.onnx');
   }
   async synthesize(text: string, outWav: string): Promise<void> {
-    await runOk(this.python, ['-m', 'piper', '-m', this.model, '-f', outWav, '--sentence-silence', '0.25'], { input: text, timeoutMs: 300_000 });
+    // Text goes through a UTF-8 file (not stdin): Windows pipes use the legacy code page and break on "—", "→", quotes…
+    const textFile = outWav.replace(/\.wav$/i, '') + '.txt';
+    fs.writeFileSync(textFile, text, 'utf8');
+    try {
+      await runOk(this.python, [path.join(ROOT, 'python', 'tts_piper.py'), this.model, textFile, outWav], { timeoutMs: 300_000 });
+    } finally {
+      fs.rmSync(textFile, { force: true });
+    }
   }
 }
 

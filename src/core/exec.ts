@@ -13,7 +13,9 @@ export function run(
   opts: { cwd?: string; input?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
 ): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    // UTF-8 mode for Python helpers: on Windows they would otherwise read and print in the legacy code page.
+    const env = { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...(opts.env ?? process.env) };
+    const child = spawn(cmd, args, { cwd: opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = opts.timeoutMs
@@ -39,7 +41,11 @@ export function run(
 
 export async function runOk(cmd: string, args: string[], opts: Parameters<typeof run>[2] = {}): Promise<string> {
   const r = await run(cmd, args, opts);
-  if (r.code !== 0) throw new Error(`${cmd} ${args.slice(0, 3).join(' ')} failed (${r.code}): ${r.stderr.slice(-800)}`);
+  if (r.code !== 0) {
+    // Lead with the last line (for Python tracebacks that is the actual exception), then the tail for context.
+    const last = r.stderr.trim().split(/\r?\n/).filter(Boolean).pop() ?? '';
+    throw new Error(`${cmd} ${args.slice(0, 2).join(' ')} failed (${r.code}): ${last}\n${r.stderr.slice(-800)}`);
+  }
   return r.stdout;
 }
 
