@@ -46,7 +46,7 @@ export interface AppConfig {
   };
   aligner: AlignerName;
   whisperModel: string;
-  render: { browserExecutable: string; concurrency: number; musicFile: string; gl: string; music: string; presenter: '2d' | '3d' };
+  render: { browserExecutable: string; concurrency: number; musicFile: string; gl: string; music: string; presenter: '2d' | '3d'; characterModel: string };
   githubToken: string;
   channelName: string;
   port: number;
@@ -71,6 +71,14 @@ function detectBrowser(): string {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ];
   return candidates.find((c) => fs.existsSync(c)) ?? '';
+}
+
+/** A rigged .glb/.gltf in models/character/ (explicit CHARACTER_MODEL wins). Returns the file name only. */
+function detectCharacter(explicit: string): string {
+  const dir = path.join(ROOT, 'models', 'character');
+  if (explicit) return path.basename(explicit);
+  if (!fs.existsSync(dir)) return '';
+  return fs.readdirSync(dir).find((f) => /\.(glb|gltf)$/i.test(f)) ?? '';
 }
 
 export function loadConfig(): AppConfig {
@@ -102,6 +110,7 @@ export function loadConfig(): AppConfig {
       gl: env('RENDER_GL', 'angle'),
       music: env('MUSIC', 'auto'),
       presenter: env('PRESENTER', '3d') === '2d' ? '2d' : '3d',
+      characterModel: detectCharacter(env('CHARACTER_MODEL')),
       musicFile: resolveFromRoot(env('MUSIC_FILE')),
     },
     githubToken: env('GITHUB_TOKEN'),

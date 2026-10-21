@@ -206,6 +206,7 @@ const SceneBody: React.FC<{ scene: Scene; timing: SceneTiming; tokens?: CodeToke
 export const Explainer: React.FC<VideoProps> = ({ script, timing, code }) => {
   applyPalette(script.theme, script.channelName ?? script.subject);
   theme.presenter = script.presenter ?? '3d';
+  theme.characterModel = script.characterModel ?? '';
   const { width, height, fps } = useVideoConfig();
   const layout = layoutFor(width, height);
   const explainer = script.mode !== 'repo-video';

@@ -13,6 +13,8 @@ export const theme = {
   /** Which presenter appearance this video uses (see LOOKS in Presenter.tsx). */
   look: 0,
   presenter: '3d' as '2d' | '3d',
+  /** File name of an installed rigged character (models/character/*.glb); empty = built-in toon boy. */
+  characterModel: '' as string,
 };
 
 export function applyPalette(p: Palette | undefined, seed = ''): void {

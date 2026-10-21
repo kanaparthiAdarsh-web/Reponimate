@@ -279,6 +279,7 @@ export const ScriptSchema = z.object({
   theme: PaletteSchema.optional(),
   channelName: z.string().max(40).optional(),
   presenter: z.enum(['2d', '3d']).optional(),
+  characterModel: z.string().regex(/^[\w.-]+\.(glb|gltf)$/).optional(),
   scenes: z.array(SceneSchema).min(1),
 });
 export type Script = z.infer<typeof ScriptSchema>;

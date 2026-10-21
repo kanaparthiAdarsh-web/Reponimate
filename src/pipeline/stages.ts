@@ -146,6 +146,8 @@ const script: Stage = {
     result.theme = choosePalette(analysis, input.mode);
     if (input.channelName) result.channelName = input.channelName;
     result.presenter = ctx.cfg.render.presenter;
+    const model = ctx.cfg.render.characterModel;
+    if (model) result.characterModel = model;
     writeJson(ctx.file('script.json'), ScriptSchema.parse(result));
     ctx.log.info(`palette: ${result.theme.name}`);
     const minutes = result.wordCount / 150;

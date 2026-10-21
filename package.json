@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "setup:voices": "tsx src/cli/setup-voices.ts",
     "build:rust": "cargo build --release --manifest-path crates/reponimate-scan/Cargo.toml",
-    "test:rust": "cargo test --manifest-path crates/reponimate-scan/Cargo.toml"
+    "test:rust": "cargo test --manifest-path crates/reponimate-scan/Cargo.toml",
+    "setup:character": "tsx src/cli/setup-character.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.2.8",

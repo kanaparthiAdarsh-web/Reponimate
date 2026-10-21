@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { Pose, Prop, WordTiming } from '../../../core/schemas.js';
 import { theme } from '../theme';
 import { poseAt } from './Presenter';
+import { ModelCharacter } from './ModelCharacter';
 
 /*
  * A stylised 3D "game character" boy built entirely from primitives (no external model files, no licences).
@@ -317,6 +318,7 @@ export const Presenter3D: React.FC<{
   const blink = frame % 115 < 4;
   const bounce = pose === 'celebrate' ? Math.abs(Math.sin(t * 6)) * 0.18 : walking ? Math.abs(Math.sin(t * 9)) * 0.05 : 0;
   const propPop = spring({ frame: frame - delay - 20, fps, config: { damping: 9, stiffness: 160 } });
+  const rampFallback = useToonRamp();
   const w = Math.round(size * 0.62);
   const h = Math.round(size);
   return (
@@ -327,7 +329,20 @@ export const Presenter3D: React.FC<{
         <directionalLight position={[2.5, 4, 5]} intensity={2.2} />
         <directionalLight position={[-3, 2, -3]} intensity={1.4} color={theme.primary} />
         <group position={[walkX, -0.05, 0]} rotation={[0, walking ? rad(35) : rad(-6) + Math.sin(t * 0.7) * 0.05, 0]}>
-          <Boy p={p} t={t} talking={talking} mouth={mouth} blink={blink} walking={walking} bounce={bounce} look={look} prop={prop} propPop={propPop} shirt={outfit ?? theme.primary} pose={pose} />
+          {theme.characterModel ? (
+            <>
+              <hemisphereLight args={['#ffffff', '#555555', 2.2]} />
+              <directionalLight position={[0, 2.5, 6]} intensity={2.4} />
+              <ModelCharacter file={theme.characterModel} pose={p} talk={mouth} t={t} walking={walking} />
+              {prop === 'bulb' && (
+                <group position={[0.25, 2.65, 0]}>
+                  <Prop3D prop="bulb" t={t} ramp={rampFallback} pop={propPop} />
+                </group>
+              )}
+            </>
+          ) : (
+            <Boy p={p} t={t} talking={talking} mouth={mouth} blink={blink} walking={walking} bounce={bounce} look={look} prop={prop} propPop={propPop} shirt={outfit ?? theme.primary} pose={pose} />
+          )}
         </group>
       </ThreeCanvas>
     </div>

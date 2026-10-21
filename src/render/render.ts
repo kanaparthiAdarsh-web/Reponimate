@@ -31,7 +31,10 @@ let bundleCache: string | null = null;
 async function getBundle(log: Logger): Promise<string> {
   if (bundleCache) return bundleCache;
   log.info('bundling Remotion project…');
-  bundleCache = await bundle({ entryPoint: path.join(ROOT, 'src', 'render', 'remotion', 'index.ts'), onProgress: () => {} });
+  // models/character is served as the public dir so an installed character model can be loaded with staticFile().
+  const publicDir = path.join(ROOT, 'models', 'character');
+  fs.mkdirSync(publicDir, { recursive: true });
+  bundleCache = await bundle({ entryPoint: path.join(ROOT, 'src', 'render', 'remotion', 'index.ts'), publicDir, onProgress: () => {} });
   return bundleCache;
 }
 
