@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reponimate Studio</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">▶</span> Reponimate <small>studio</small></div>
+    <div id="health" class="health">checking tools…</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Turn code and docs into explainer videos</h1>
+      <p>Everything runs on your machine: local RAG, open-licence voices, Remotion motion graphics. Every sentence is checked against the source before it is narrated.</p>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-mode="repo-video" role="tab">① Repo → Video</button>
+      <button class="tab" data-mode="doc-video" role="tab">② Description → Video</button>
+      <button class="tab" data-mode="doc-reel" role="tab">③ Description → Reel</button>
+    </nav>
+
+    <section class="panel" id="form-panel">
+      <form id="job-form" autocomplete="off">
+        <div class="mode-help" id="mode-help"></div>
+
+        <div class="field repo-only">
+          <label for="repoUrl">GitHub repository URL</label>
+          <input id="repoUrl" name="repoUrl" placeholder="https://github.com/owner/repository" />
+        </div>
+
+        <div class="field doc-only">
+          <label for="title">Title <span class="opt">(optional)</span></label>
+          <input id="title" name="title" placeholder="e.g. How HTTPS works" />
+        </div>
+        <div class="field doc-only">
+          <label for="text">Paste documentation / description</label>
+          <textarea id="text" name="text" rows="9" placeholder="Paste markdown, notes, docs… (30+ words). Headings become chapters."></textarea>
+        </div>
+        <div class="row doc-only">
+          <div class="field">
+            <label for="url">…or a web page URL</label>
+            <input id="url" name="url" placeholder="https://example.com/article" />
+          </div>
+          <div class="field">
+            <label for="topic">…or a topic to research (Wikipedia)</label>
+            <input id="topic" name="topic" placeholder="e.g. Black holes" />
+          </div>
+        </div>
+
+        <div class="row options">
+          <label class="check"><input type="checkbox" id="preview" /> Fast preview (half resolution)</label>
+          <label class="sel">Writer
+            <select id="llm">
+              <option value="">default (.env)</option>
+              <option value="ollama">Ollama (local LLM)</option>
+              <option value="none">Extractive (no LLM)</option>
+              <option value="anthropic">Anthropic API</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary">Generate video</button>
+          <button type="button" id="autopilot" class="btn start">⚡ Start — pick a trending topic for me</button>
+          <button type="button" id="show-trending" class="btn ghost">Browse trending</button>
+        </div>
+        <div id="form-error" class="error" hidden></div>
+      </form>
+      <div id="trending" class="trending" hidden></div>
+    </section>
+
+    <section class="panel">
+      <h2>Jobs</h2>
+      <div id="jobs" class="jobs"><p class="muted">No videos yet.</p></div>
+    </section>
+
+    <section class="panel" id="detail" hidden></section>
+  </main>
+
+  <footer>Open-source, local-first. Review each video before uploading and enable YouTube's “altered or synthetic content” disclosure for AI narration.</footer>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

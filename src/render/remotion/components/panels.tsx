@@ -1,0 +1,310 @@
+import React from 'react';
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import type { Graph, Visual, WordTiming } from '../../../core/schemas.js';
+import { theme, type Layout } from '../theme';
+import type { CodeToken } from '../types';
+import { revealFrame, useEntrance } from './primitives';
+
+/* ------------------------------ CodeWalkthrough ------------------------------ */
+
+export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; tokens?: CodeToken[][]; words: WordTiming[]; layout: Layout; width: number; height: number }> = ({
+  code,
+  tokens,
+  words,
+  layout,
+  width,
+  height,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = useEntrance(4);
+  const lines = tokens ?? code.code.split('\n').map((l) => [{ content: l, color: theme.text }]);
+  const longest = Math.max(20, ...code.code.split('\n').map((l) => l.replace(/\t/g, '  ').length));
+  const fontSize = Math.max(20, Math.min(layout.unit * 0.78, (width - 140) / (longest * 0.62), (height - 120) / (lines.length * 1.5)));
+  // Step through the highlighted lines in sync with the narration.
+  const hl = code.highlight.length ? code.highlight : [code.startLine];
+  const step = hl.findLastIndex((_, i) => frame >= revealFrame(i, hl.length, words, fps, 1));
+  const active = hl[Math.max(0, step)];
+  return (
+    <div
+      style={{
+        width,
+        height,
+        background: '#0A1222',
+        border: `2px solid ${theme.panelBorder}`,
+        borderRadius: 20,
+        boxShadow: '0 30px 80px rgba(0,0,0,0.5)',
+        overflow: 'hidden',
+        opacity: enter,
+        transform: `translateY(${(1 - enter) * 40}px)`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px', background: theme.panel, borderBottom: `2px solid ${theme.panelBorder}` }}>
+        {['#F87171', '#FBBF24', '#4ADE80'].map((c) => (
+          <div key={c} style={{ width: 16, height: 16, borderRadius: 8, background: c }} />
+        ))}
+        <div style={{ marginLeft: 14, fontFamily: theme.mono, fontSize: layout.unit * 0.5, color: theme.muted }}>
+          {code.path} · lines {code.startLine}–{code.endLine}
+        </div>
+      </div>
+      <div style={{ padding: '18px 0', fontFamily: theme.mono, fontSize, lineHeight: 1.45 }}>
+        {lines.map((line, i) => {
+          const n = code.startLine + i;
+          const on = n === active;
+          const appear = interpolate(frame, [6 + i * 1.5, 14 + i * 1.5], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+          return (
+            <div key={i} style={{ display: 'flex', background: on ? 'rgba(34, 211, 238, 0.14)' : 'transparent', borderLeft: `6px solid ${on ? theme.cyan : 'transparent'}`, opacity: appear, whiteSpace: 'pre-wrap' }}>
+              <span style={{ width: fontSize * 3.2, textAlign: 'right', paddingRight: fontSize * 0.9, color: on ? theme.cyan : '#4B5E7E', flexShrink: 0 }}>{n}</span>
+              <span style={{ opacity: on || !code.highlight.length ? 1 : 0.72 }}>
+                {line.map((tk, k) => (
+                  <span key={k} style={{ color: tk.color }}>
+                    {tk.content.replace(/\t/g, '  ')}
+                  </span>
+                ))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------ ArchitectureDiagram ------------------------------ */
+
+/** Layered layout computed from the graph data (longest path depth). No LLM-generated drawing code. */
+export function layoutGraph(g: Graph, width: number, height: number, vertical: boolean): Map<string, { x: number; y: number }> {
+  const depth = new Map<string, number>(g.nodes.map((n) => [n.id, 0]));
+  for (let iter = 0; iter < g.nodes.length; iter++) {
+    let changed = false;
+    for (const e of g.edges) {
+      const d = (depth.get(e.from) ?? 0) + 1;
+      if (depth.has(e.to) && d > depth.get(e.to)! && d < g.nodes.length) {
+        depth.set(e.to, d);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  const layers = new Map<number, string[]>();
+  for (const n of g.nodes) {
+    const d = depth.get(n.id)!;
+    layers.set(d, [...(layers.get(d) ?? []), n.id]);
+  }
+  const keys = [...layers.keys()].sort((a, b) => a - b);
+  const pos = new Map<string, { x: number; y: number }>();
+  keys.forEach((k, li) => {
+    const ids = layers.get(k)!;
+    ids.forEach((id, i) => {
+      const a = (li + 0.5) / keys.length;
+      const b = (i + 0.5) / ids.length;
+      pos.set(id, vertical ? { x: b * width, y: a * height } : { x: a * width, y: b * height });
+    });
+  });
+  return pos;
+}
+
+export const ArchitectureDiagram: React.FC<{ graph: Graph; words: WordTiming[]; layout: Layout; width: number; height: number }> = ({ graph, words, layout, width, height }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pos = layoutGraph(graph, width, height, layout.portrait);
+  const nodeW = layout.portrait ? 300 : 280;
+  const nodeH = 76;
+  const order = graph.nodes.map((n) => n.id);
+  const appear = (id: string): number => revealFrame(order.indexOf(id), order.length + 2, words, fps, 0.3);
+  return (
+    <svg width={width} height={height} style={{ overflow: 'visible' }}>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={theme.muted} />
+        </marker>
+      </defs>
+      {graph.edges.map((e, i) => {
+        const a = pos.get(e.from);
+        const b = pos.get(e.to);
+        if (!a || !b) return null;
+        const start = Math.max(appear(e.from), appear(e.to)) + 6;
+        const p = interpolate(frame, [start, start + 18], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        // trim lines so they start/end at the node borders
+        const trimA = layout.portrait ? nodeH / 2 / Math.max(0.3, Math.abs(dy / len)) : nodeW / 2 / Math.max(0.3, Math.abs(dx / len));
+        const ax = a.x + (dx / len) * Math.min(trimA, len / 3);
+        const ay = a.y + (dy / len) * Math.min(trimA, len / 3);
+        const bx = b.x - (dx / len) * Math.min(trimA + 8, len / 3);
+        const by = b.y - (dy / len) * Math.min(trimA + 8, len / 3);
+        const ext = e.to.startsWith('ext:');
+        return (
+          <line
+            key={i}
+            x1={ax}
+            y1={ay}
+            x2={ax + (bx - ax) * p}
+            y2={ay + (by - ay) * p}
+            stroke={ext ? theme.orange : theme.muted}
+            strokeWidth={3}
+            strokeDasharray={ext ? '10 8' : undefined}
+            markerEnd={p > 0.95 ? 'url(#arrow)' : undefined}
+            opacity={0.85}
+          />
+        );
+      })}
+      {graph.nodes.map((n) => {
+        const p0 = pos.get(n.id)!;
+        const s = spring({ frame: frame - appear(n.id), fps, config: { damping: 14 } });
+        const ext = n.group === 'external';
+        return (
+          <g key={n.id} transform={`translate(${p0.x - nodeW / 2} ${p0.y - nodeH / 2}) scale(${s})`} style={{ transformOrigin: `${nodeW / 2}px ${nodeH / 2}px`, transformBox: 'fill-box' }} opacity={s}>
+            <rect width={nodeW} height={nodeH} rx={16} fill={ext ? '#2A1A0F' : theme.panel} stroke={ext ? theme.orange : theme.cyan} strokeWidth={3} />
+            <text x={nodeW / 2} y={nodeH / 2 + 10} textAnchor="middle" fontFamily={theme.mono} fontSize={n.label.length > 20 ? 22 : 27} fill={theme.text}>
+              {n.label.length > 24 ? '…' + n.label.slice(-23) : n.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+/* ------------------------------ TerminalDemo ------------------------------ */
+
+export const TerminalDemo: React.FC<{ terminal: NonNullable<Visual['terminal']>; words: WordTiming[]; layout: Layout; width: number }> = ({ terminal, words, layout, width }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = useEntrance(2);
+  const fs = layout.unit * 0.72;
+  return (
+    <div style={{ width, background: '#05080F', borderRadius: 18, border: `2px solid ${theme.panelBorder}`, overflow: 'hidden', opacity: enter, transform: `scale(${0.95 + 0.05 * enter})` }}>
+      <div style={{ padding: '12px 22px', background: theme.panel, fontFamily: theme.mono, fontSize: layout.unit * 0.48, color: theme.orange }}>⚠ {terminal.label}</div>
+      <div style={{ padding: 28, fontFamily: theme.mono, fontSize: fs, lineHeight: 1.6 }}>
+        {terminal.lines.map((l, i) => {
+          const start = revealFrame(i, terminal.lines.length, words, fps, 0.5);
+          const chars = Math.floor(interpolate(frame, [start, start + l.text.length * 1.2 + 4], [0, l.text.length], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
+          if (frame < start) return null;
+          const typing = chars < l.text.length;
+          return (
+            <div key={i} style={{ color: l.kind === 'cmd' ? theme.text : theme.muted, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <span style={{ color: theme.green }}>{l.kind === 'cmd' ? '$ ' : '# '}</span>
+              {l.text.slice(0, chars)}
+              {typing && frame % 20 < 10 && <span style={{ background: theme.text }}>&nbsp;</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------ Stats, FileTree, Bullets, ProsCons ------------------------------ */
+
+export const StatsCounter: React.FC<{ stats: NonNullable<Visual['stats']>; layout: Layout; words: WordTiming[] }> = ({ stats, layout, words }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: layout.portrait ? '1fr 1fr' : '1fr 1fr', gap: 28 }}>
+      {stats.map((s, i) => {
+        const start = revealFrame(i, stats.length, words, fps, 0.3);
+        const p = spring({ frame: frame - start, fps, config: { damping: 20 } });
+        const val = Math.round(interpolate(frame, [start, start + 40], [0, s.value], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
+        return (
+          <div key={i} style={{ background: theme.panel, border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: '26px 30px', opacity: p, transform: `translateY(${(1 - p) * 30}px)` }}>
+            <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * 2, color: i % 2 ? theme.orange : theme.cyan }}>
+              {val.toLocaleString('en-US')}
+              {s.suffix ?? ''}
+            </div>
+            <div style={{ fontFamily: theme.font, fontSize: layout.unit * 0.7, color: theme.muted }}>{s.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const FileTree: React.FC<{ files: string[]; layout: Layout; maxItems?: number }> = ({ files, layout, maxItems = 14 }) => {
+  const frame = useCurrentFrame();
+  return (
+    <div style={{ background: theme.panel, border: `2px solid ${theme.panelBorder}`, borderRadius: 18, padding: '22px 28px', fontFamily: theme.mono, fontSize: layout.unit * 0.55, color: theme.text, lineHeight: 1.55 }}>
+      {files.slice(0, maxItems).map((f, i) => {
+        const depth = f.split('/').length - 1;
+        const o = interpolate(frame, [8 + i * 3, 16 + i * 3], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        return (
+          <div key={f} style={{ paddingLeft: depth * 28, opacity: o, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ color: depth ? theme.muted : theme.cyan }}>{depth ? '└ ' : '▸ '}</span>
+            {f.split('/').pop()}
+          </div>
+        );
+      })}
+      {files.length > maxItems && <div style={{ color: theme.muted }}>… {files.length - maxItems} more</div>}
+    </div>
+  );
+};
+
+export const BulletList: React.FC<{ items: string[]; layout: Layout; words: WordTiming[]; accent?: string }> = ({ items, layout, words, accent = theme.cyan }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: layout.unit * 0.7 }}>
+      {items.map((item, i) => {
+        const start = revealFrame(i, items.length, words, fps, 0.4);
+        const p = spring({ frame: frame - start, fps, config: { damping: 18 } });
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 22, opacity: p, transform: `translateX(${(1 - p) * 50}px)` }}>
+            <div style={{ minWidth: layout.unit * 1.2, height: layout.unit * 1.2, borderRadius: 12, background: i % 2 ? theme.orange : accent, color: theme.ink, fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {i + 1}
+            </div>
+            <div style={{ fontFamily: theme.font, fontWeight: 600, fontSize: layout.unit * 0.95, color: theme.text, lineHeight: 1.3 }}>{item}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const ProsConsPanel: React.FC<{ pros: string[]; cons: string[]; layout: Layout; words: WordTiming[] }> = ({ pros, cons, layout, words }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const all = [...pros.map((p) => ['+', p] as const), ...cons.map((c) => ['−', c] as const)];
+  const col = (title: string, color: string, items: string[], offset: number) => (
+    <div style={{ flex: 1, background: theme.panel, border: `2px solid ${color}55`, borderRadius: 22, padding: 30 }}>
+      <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * 1.0, color, marginBottom: 18 }}>{title}</div>
+      {items.map((it, i) => {
+        const start = revealFrame(offset + i, all.length, words, fps, 0.4);
+        const p = spring({ frame: frame - start, fps, config: { damping: 18 } });
+        return (
+          <div key={i} style={{ display: 'flex', gap: 14, fontFamily: theme.font, fontSize: layout.unit * 0.72, color: theme.text, marginBottom: 16, opacity: p, transform: `translateY(${(1 - p) * 20}px)`, lineHeight: 1.3 }}>
+            <span style={{ color, fontWeight: 800 }}>{title === 'Pros' ? '✓' : '✗'}</span>
+            <span>{it}</span>
+          </div>
+        );
+      })}
+      {!items.length && <div style={{ fontFamily: theme.font, fontSize: layout.unit * 0.65, color: theme.muted }}>None found</div>}
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: layout.portrait ? 'column' : 'row', gap: 32 }}>
+      {col('Pros', theme.cyan, pros, 0)}
+      {col('Cons', theme.orange, cons, pros.length)}
+    </div>
+  );
+};
+
+export const ComparisonPanel: React.FC<{ compare: NonNullable<Visual['compare']>; layout: Layout }> = ({ compare, layout }) => {
+  const frame = useCurrentFrame();
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compare.columns.length}, 1fr)`, gap: 4, fontFamily: theme.font, fontSize: layout.unit * 0.65 }}>
+      {compare.columns.map((c) => (
+        <div key={c} style={{ background: theme.cyan, color: theme.ink, fontWeight: 800, padding: 16 }}>
+          {c}
+        </div>
+      ))}
+      {compare.rows.flatMap((r, i) =>
+        r.map((cell, j) => (
+          <div key={`${i}-${j}`} style={{ background: theme.panel, color: theme.text, padding: 16, opacity: interpolate(frame, [10 + i * 8, 20 + i * 8], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) }}>
+            {cell}
+          </div>
+        )),
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,9 @@
+{
+  "name": "tinyqueue-lite",
+  "version": "1.0.0",
+  "description": "A tiny priority queue",
+  "main": "src/index.js",
+  "license": "MIT",
+  "devDependencies": { "vitest": "^3.0.0" },
+  "scripts": { "test": "vitest" }
+}

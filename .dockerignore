@@ -1,0 +1,7 @@
+node_modules
+out
+cache
+models
+crates/*/target
+.git
+.env
