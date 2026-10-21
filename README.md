@@ -42,6 +42,30 @@ npm run make-video -- --mode repo-video --trending
 
 You don't need Ollama. Without it, use `--llm none` (or pick "Extractive" in the studio). The script is then assembled only from verified facts and sentences in the source. It's less lively, but it can't invent anything.
 
+### Windows quick start (Command Prompt or PowerShell)
+
+```bat
+:: 1. One-time tools (skip any you already have)
+winget install Git.Git OpenJS.NodeJS.LTS Python.Python.3.12 Gyan.FFmpeg
+:: close and reopen the terminal so the new tools are on PATH
+
+:: 2. Get the project and go INTO its folder
+cd %USERPROFILE%\Documents
+git clone https://github.com/kanaparthiAdarsh-web/Reponimate.git
+cd Reponimate
+
+:: 3. Install and download the voice
+npm install
+python -m pip install -r python\requirements.txt
+npm run setup:voices
+npm run doctor
+
+:: 4. Start the studio, then open http://localhost:4777
+npm run web
+```
+
+The commands only work inside the `Reponimate` folder, where `package.json` lives. Lines starting with `::` are comments. `npm run build:rust` is optional and needs Rust (`winget install Rustlang.Rustup`). Chrome or Edge is detected automatically for rendering.
+
 ### CLI options
 
 ```

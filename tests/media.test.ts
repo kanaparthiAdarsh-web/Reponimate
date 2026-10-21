@@ -95,3 +95,13 @@ describe('code → flowchart', () => {
     expect(buildFlow('const a = 1;', 1)).toBeNull();
   });
 });
+
+describe('config', () => {
+  it('resolves the project root on every OS (no /C:/ URL paths)', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { ROOT } = await import('../src/core/config.js');
+    expect(fs.existsSync(path.join(ROOT, 'package.json'))).toBe(true);
+    expect(ROOT).not.toMatch(/^\/[A-Za-z]:\//);
+  });
+});

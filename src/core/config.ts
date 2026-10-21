@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+// fileURLToPath (not URL.pathname) so Windows paths come out as C:\... instead of /C:/...
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 let loaded = false;
 function loadDotEnv(): void {
@@ -60,6 +62,12 @@ export interface AppConfig {
   };
 }
 
+function windowsBrowsers(): string[] {
+  if (process.platform !== 'win32') return [];
+  const roots = [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter(Boolean) as string[];
+  return roots.flatMap((r) => [path.join(r, 'Google', 'Chrome', 'Application', 'chrome.exe'), path.join(r, 'Microsoft', 'Edge', 'Application', 'msedge.exe')]);
+}
+
 /** Finds a locally installed Chromium so Remotion/Puppeteer do not need to download one. */
 function detectBrowser(): string {
   const candidates = [
@@ -69,6 +77,8 @@ function detectBrowser(): string {
     '/usr/bin/chromium-browser',
     '/usr/bin/google-chrome',
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    ...windowsBrowsers(),
   ];
   return candidates.find((c) => fs.existsSync(c)) ?? '';
 }
@@ -99,7 +109,8 @@ export function loadConfig(): AppConfig {
       kokoroVoices: resolveFromRoot(env('KOKORO_VOICES', 'models/kokoro/voices-v1.0.bin')),
       kokoroVoice: env('KOKORO_VOICE', 'af_heart'),
       espeakVoice: env('ESPEAK_VOICE', 'en-us'),
-      python: env('PYTHON', 'python3'),
+      // On Windows "python3" is usually the Microsoft Store stub, so default to "python" there.
+      python: env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
     },
     aligner: env('ALIGNER', 'whisper') as AlignerName,
     whisperModel: env('WHISPER_MODEL', 'base.en'),
