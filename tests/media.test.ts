@@ -97,6 +97,15 @@ describe('code → flowchart', () => {
 });
 
 describe('config', () => {
+  it('accepts a python command with arguments, like "py -3.12"', async () => {
+    const { splitCommand } = await import('../src/core/exec.js');
+    expect(splitCommand('py -3.12')).toEqual(['py', '-3.12']);
+    expect(splitCommand('python3')).toEqual(['python3']);
+    const { run } = await import('../src/core/exec.js');
+    const r = await run('node -e', ['process.stdout.write("ok")']);
+    expect(r.stdout).toBe('ok');
+  });
+
   it('resolves the project root on every OS (no /C:/ URL paths)', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');

@@ -1,4 +1,12 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+
+/** "py -3.12" → ["py", "-3.12"]; an existing path with spaces (C:\Program Files\…) stays one command. */
+export function splitCommand(cmd: string): [string, ...string[]] {
+  if (!/\s/.test(cmd.trim()) || fs.existsSync(cmd)) return [cmd];
+  const [bin, ...rest] = cmd.trim().split(/\s+/);
+  return [bin, ...rest];
+}
 
 export interface ExecResult {
   code: number;
@@ -15,7 +23,8 @@ export function run(
   return new Promise((resolve, reject) => {
     // UTF-8 mode for Python helpers: on Windows they would otherwise read and print in the legacy code page.
     const env = { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...(opts.env ?? process.env) };
-    const child = spawn(cmd, args, { cwd: opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const [bin, ...pre] = splitCommand(cmd);
+    const child = spawn(bin, [...pre, ...args], { cwd: opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = opts.timeoutMs
