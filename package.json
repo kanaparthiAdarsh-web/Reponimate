@@ -1,0 +1,52 @@
+{
+  "name": "reponimate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first generator that turns GitHub repositories and documentation into narrated explainer videos and vertical reels.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "make-video": "tsx src/cli/make-video.ts",
+    "trending": "tsx src/cli/trending.ts",
+    "web": "tsx src/server/index.ts",
+    "studio": "remotion studio src/render/remotion/index.ts",
+    "doctor": "tsx src/cli/doctor.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "setup:voices": "tsx src/cli/setup-voices.ts",
+    "build:rust": "cargo build --release --manifest-path crates/reponimate-scan/Cargo.toml",
+    "test:rust": "cargo test --manifest-path crates/reponimate-scan/Cargo.toml",
+    "setup:character": "tsx src/cli/setup-character.ts"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.2.8",
+    "@fontsource/jetbrains-mono": "5.2.8",
+    "@fontsource/patrick-hand": "5.2.8",
+    "@react-three/fiber": "9.3.0",
+    "@remotion/bundler": "4.0.537",
+    "@remotion/cli": "4.0.537",
+    "@remotion/renderer": "4.0.537",
+    "@remotion/three": "4.0.537",
+    "express": "5.1.0",
+    "puppeteer-core": "24.25.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.537",
+    "shiki": "4.0.2",
+    "three": "0.180.0",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.3",
+    "@types/node": "22.18.12",
+    "@types/react": "19.2.2",
+    "@types/three": "0.180.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

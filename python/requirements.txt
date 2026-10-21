@@ -1,0 +1,8 @@
+# Local speech tools. Install with: pip install -r python/requirements.txt
+piper-tts==1.8.0
+faster-whisper==1.2.1
+# Procedural music and sound effects
+numpy>=1.26
+# Optional higher-quality voice (Apache-2.0 weights):
+# kokoro-onnx==0.6.1
+# soundfile

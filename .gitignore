@@ -1,0 +1,17 @@
+node_modules/
+out/
+cache/
+models/
+.env
+*.wav
+*.mp3
+*.mp4
+*.onnx
+*.onnx.json
+*.log
+.DS_Store
+coverage/
+__pycache__/
+.venv/
+scratch/
+target/

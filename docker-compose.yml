@@ -1,0 +1,20 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    # Pull models once: docker compose exec ollama ollama pull qwen2.5:7b-instruct && docker compose exec ollama ollama pull nomic-embed-text
+
+  studio:
+    build: .
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    ports:
+      - "127.0.0.1:4777:4777"
+    volumes:
+      - ./out:/app/out
+      - ./cache:/app/cache
+
+volumes:
+  ollama:
