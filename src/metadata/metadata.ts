@@ -83,6 +83,7 @@ export function buildMetadata(o: { script: Script; analysis: Analysis; timing: T
     `Narration: synthetic voice (${o.voice.provider} / ${o.voice.voice}; ${o.voice.license}). This video was produced with AI-assisted tooling; every technical statement was checked against the source material.`,
     'Altered or synthetic content: the narrator voice is computer-generated.',
     '',
+    ...(script.channelName ? [`Subscribe to ${script.channelName} for more explainers.`, ''] : []),
     hashtags.join(' '),
   ].join('\n');
 
@@ -92,7 +93,7 @@ export function buildMetadata(o: { script: Script; analysis: Analysis; timing: T
     chapters,
     tags,
     thumbnailText,
-    thumbnailPrompt: `Bold YouTube thumbnail, dark navy background, cyan and orange accents, large text "${thumbnailText}", ${analysis.kind === 'repo' ? `a code window with ${analysis.languages[0]?.name ?? 'source'} code and a simple architecture diagram` : 'a friendly stick figure pointing at a whiteboard'}, high contrast, readable on phones.`,
+    thumbnailPrompt: `Bold YouTube thumbnail in a muted "${script.theme?.name ?? 'Slate'}" palette (background ${script.theme?.bg ?? '#16191D'}, accents ${script.theme?.primary ?? '#9DB4C0'} and ${script.theme?.secondary ?? '#E2B07A'}), large text "${thumbnailText}", ${analysis.kind === 'repo' ? `a code window with ${analysis.languages[0]?.name ?? 'source'} code and a friendly flat-illustration presenter` : 'a friendly flat-illustration presenter pointing at a whiteboard'}, high contrast, readable on phones.`,
     hashtags,
   };
 }

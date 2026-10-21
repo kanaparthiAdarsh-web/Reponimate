@@ -5,6 +5,7 @@ import type { AppConfig } from '../core/config.js';
 import { ROOT } from '../core/config.js';
 import { UserError } from '../core/errors.js';
 import type { Analysis, Metadata, Script } from '../core/schemas.js';
+import { PALETTES } from '../render/palette-data.js';
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -17,23 +18,35 @@ function fontFace(family: string, file: string, weight: number): string {
 export function thumbnailHtml(meta: Metadata, script: Script, analysis: Analysis): string {
   const words = meta.thumbnailText.split(/\s+/).slice(0, 3);
   const code = script.scenes.find((s) => s.visual.code)?.visual.code;
+  const p = script.theme ?? PALETTES.slate;
+  // A flat presenter (same style as the video's host) pointing at the title.
+  const person = `<svg class="person" viewBox="0 0 300 500"><g stroke-linecap="round" fill="none">
+    <path d="M132 292 L120 384 L112 470" stroke="#3a3f4b" stroke-width="38"/><path d="M168 292 L182 384 L190 470" stroke="#3a3f4b" stroke-width="38"/>
+    <path d="M112 150 Q150 136 188 150 L184 296 Q150 304 116 296 Z" fill="${p.primary}" stroke="none"/>
+    <path d="M116 156 L64 214 L40 168" stroke="${p.primary}" stroke-width="28"/><circle cx="40" cy="166" r="13" fill="#E8B796" stroke="none"/>
+    <path d="M184 156 L250 140 L292 104" stroke="${p.primary}" stroke-width="28"/><circle cx="292" cy="102" r="13" fill="#E8B796" stroke="none"/>
+    <ellipse cx="150" cy="80" rx="38" ry="44" fill="#E8B796" stroke="none"/>
+    <path d="M110 72 C108 42 128 30 152 30 C176 30 194 44 190 70 C184 56 170 48 150 50 C134 50 118 56 110 72 Z" fill="#3B2A20" stroke="none"/>
+    <ellipse cx="136" cy="76" rx="5" ry="6" fill="#2A211C" stroke="none"/><ellipse cx="164" cy="76" rx="5" ry="6" fill="#2A211C" stroke="none"/>
+    <path d="M136 100 Q150 116 164 100" fill="#6B2E2A" stroke="#6B2E2A" stroke-width="3"/></g></svg>`;
   const art = code
-    ? `<pre class="code">${esc(code.code.split('\n').slice(0, 9).map((l) => l.slice(0, 38)).join('\n'))}</pre>`
-    : `<svg class="stick" viewBox="0 0 300 500"><g stroke="#E6EDF7" stroke-width="10" fill="none" stroke-linecap="round"><circle cx="150" cy="88" r="40" fill="#0B1426"/><path d="M150 128 L150 285"/><path d="M150 150 L80 210 L40 160"/><path d="M150 150 L230 120 L290 70"/><path d="M150 285 L120 380 L110 470"/><path d="M150 285 L180 380 L190 470"/><path d="M134 102 Q150 118 166 102"/></g><circle cx="134" cy="82" r="6" fill="#E6EDF7"/><circle cx="166" cy="82" r="6" fill="#E6EDF7"/></svg>`;
+    ? `<pre class="code">${esc(code.code.split('\n').slice(0, 9).map((l) => l.slice(0, 38)).join('\n'))}</pre>${person}`
+    : person;
   const sub = analysis.kind === 'repo' ? `${analysis.repo.owner}/${analysis.repo.name}` : script.mode === 'doc-reel' ? 'IN 60 SECONDS' : 'EXPLAINED SIMPLY';
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${fontFace('Inter', 'inter/files/inter-latin-800-normal.woff2', 800)}
 ${fontFace('JetBrains Mono', 'jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2', 400)}
 *{margin:0;box-sizing:border-box}
-body{width:1280px;height:720px;overflow:hidden;background:radial-gradient(ellipse at 25% 20%,#16294A 0%,#0B1426 65%);font-family:Inter,sans-serif;position:relative}
+body{width:1280px;height:720px;overflow:hidden;background:radial-gradient(ellipse at 25% 20%,${p.bg2} 0%,${p.bg} 65%);font-family:Inter,sans-serif;position:relative}
 .t{position:absolute;left:70px;top:90px;width:700px;display:flex;flex-direction:column;gap:6px}
-.w{font-weight:800;font-size:118px;line-height:.98;color:#fff;letter-spacing:-3px;text-shadow:0 8px 0 rgba(0,0,0,.35);word-break:break-word}
-.w:nth-child(2){color:#22D3EE}.w:nth-child(3){color:#FB923C}
-.sub{position:absolute;left:74px;bottom:70px;font-family:'JetBrains Mono',monospace;font-size:30px;color:#8DA2C0}
-.bar{position:absolute;left:74px;bottom:120px;width:260px;height:12px;border-radius:6px;background:linear-gradient(90deg,#22D3EE,#FB923C)}
-.code{position:absolute;right:50px;top:110px;width:440px;padding:30px;background:#0A1222;border:3px solid #22D3EE;border-radius:22px;color:#E6EDF7;font:24px/1.45 'JetBrains Mono',monospace;transform:rotate(3deg);box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
-.stick{position:absolute;right:120px;top:120px;width:300px;height:500px}
-</style></head><body><div class="t">${words.map((w) => `<div class="w">${esc(w)}</div>`).join('')}</div>${art}<div class="bar"></div><div class="sub">${esc(sub)}</div></body></html>`;
+.w{font-weight:800;font-size:118px;line-height:.98;color:${p.text};letter-spacing:-3px;text-shadow:0 8px 0 rgba(0,0,0,.35);word-break:break-word}
+.w:nth-child(2){color:${p.primary}}.w:nth-child(3){color:${p.secondary}}
+.sub{position:absolute;left:74px;bottom:70px;font-family:'JetBrains Mono',monospace;font-size:30px;color:${p.muted}}
+.bar{position:absolute;left:74px;bottom:120px;width:260px;height:12px;border-radius:6px;background:linear-gradient(90deg,${p.primary},${p.secondary})}
+.code{position:absolute;right:120px;top:90px;width:420px;padding:30px;background:${p.codeBg};border:3px solid ${p.primary};border-radius:22px;color:${p.text};font:24px/1.45 'JetBrains Mono',monospace;transform:rotate(3deg);box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.person{position:absolute;right:20px;bottom:-30px;width:260px;height:433px}
+.badge{position:absolute;right:30px;top:24px;padding:8px 18px;border-radius:999px;background:${p.panel};color:${p.text};font:700 22px Inter,sans-serif;border:2px solid ${p.primary}}
+</style></head><body><div class="t">${words.map((w) => `<div class="w">${esc(w)}</div>`).join('')}</div>${art}<div class="bar"></div><div class="sub">${esc(sub)}</div>${script.channelName ? `<div class="badge">${esc(script.channelName)}</div>` : ''}</body></html>`;
 }
 
 /** Renders thumbnail.html to a 1280x720 PNG with the locally installed Chromium. */

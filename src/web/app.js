@@ -4,7 +4,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 const HELP = {
   'repo-video': 'Paste a public GitHub URL. Reponimate clones it (without running any of its code), maps the architecture, retrieves real code with RAG and makes a 16:9 code-walkthrough video.',
-  'doc-video': 'Paste documentation, notes or any description — or give a URL or a topic. You get a 16:9 explainer with an animated stick-figure teacher, whiteboards and captions.',
+  'doc-video': 'Paste documentation, notes or any description — or give a URL or a topic. You get a 16:9 explainer with an animated animated presenter teacher, whiteboards and captions.',
   'doc-reel': 'Same inputs, but a vertical 9:16 short (under a minute) with big captions — ready for Shorts / Reels.',
 };
 
@@ -60,6 +60,7 @@ function formBody() {
     topic: $('#topic').value.trim(),
     preview: $('#preview').checked,
     llm: $('#llm').value,
+    channelName: $('#channelName').value.trim(),
   };
 }
 
@@ -85,7 +86,7 @@ async function autopilot() {
   btn.disabled = true;
   btn.textContent = '⚡ Searching trends…';
   try {
-    const r = await api('/api/autopilot', { mode, preview: $('#preview').checked, llm: $('#llm').value });
+    const r = await api('/api/autopilot', { mode, preview: $('#preview').checked, llm: $('#llm').value, channelName: $('#channelName').value.trim() });
     await refreshJobs();
     openJob(r.job.id);
   } catch (err) {
@@ -218,6 +219,9 @@ document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () 
 $('#job-form').addEventListener('submit', submit);
 $('#autopilot').addEventListener('click', autopilot);
 $('#show-trending').addEventListener('click', showTrending);
+// Remember the channel name between visits (per browser).
+try { $('#channelName').value = localStorage.getItem('reponimate.channel') || ''; } catch {}
+$('#channelName').addEventListener('change', () => { try { localStorage.setItem('reponimate.channel', $('#channelName').value.trim()); } catch {} });
 let saved = 'repo-video';
 try { saved = localStorage.getItem('reponimate.mode') || saved; } catch {}
 setMode(HELP[saved] ? saved : 'repo-video');

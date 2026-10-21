@@ -24,6 +24,7 @@ Options:
   --mode repo-video|doc-video|doc-reel   (default: repo-video, or doc-video when no URL is given)
   --ref <branch|tag|sha>                 pin a repository revision
   --title "..."                          title for pasted text
+  --channel "My Channel"                 channel name badge (default: CHANNEL_NAME in .env)
   --out <dir>                            output directory (default: out/<slug>)
   --resume-from <stage>                  re-run from a stage: ${STAGES.map((s) => s.name).join(', ')}
   --stop-after <stage>                   stop after a stage (e.g. script)
@@ -31,6 +32,7 @@ Options:
   --tts piper|kokoro|espeak              override TTS_PROVIDER
   --preview                              half-resolution fast render
   --chunk-render                         render in 20-second chunks (weak PCs; resumable)
+  --no-music                             no background music or sound effects
   --fresh                                delete cached results for this video and start over
   --allow-execution                      not supported: repository code is never executed
 `;
@@ -55,6 +57,8 @@ async function main(): Promise<void> {
     topic: typeof flags.topic === 'string' ? flags.topic : undefined,
     preview: Boolean(flags.preview),
     chunkRender: Boolean(flags['chunk-render']),
+    noMusic: Boolean(flags['no-music']),
+    channelName: typeof flags.channel === 'string' ? flags.channel : cfg.channelName || undefined,
   });
   if (flags.trending) {
     const pick = await pickTrending(mode);

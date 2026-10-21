@@ -2,12 +2,12 @@
 
 **Turn a GitHub repository, documentation, or a trending topic into a narrated, animated explainer video. Everything runs on your own machine.**
 
-Reponimate reads the real source material, builds a local RAG knowledge base, writes a script in which every sentence is checked against that material, and narrates it with an openly licensed voice. It then animates the script with Remotion (code walkthroughs, architecture diagrams, stick-figure whiteboard lessons, word-synced captions) and produces an MP4 with titles, a description with chapters, tags, a thumbnail and a quality report.
+Reponimate reads the real source material, builds a local RAG knowledge base, writes a script in which every sentence is checked against that material, and narrates it with an openly licensed voice. It then animates the script with Remotion (code walkthroughs, architecture diagrams, animated presenter whiteboard lessons, word-synced captions) and produces an MP4 with titles, a description with chapters, tags, a thumbnail and a quality report.
 
 | Mode | Input | Output |
 |---|---|---|
 | **① Repo → Video** | a public GitHub URL | 16:9 code walkthrough (architecture, real code, usage, pros and cons) |
-| **② Description → Video** | pasted docs or notes, a web page URL, or a topic | 16:9 explainer with a stick-figure teacher and whiteboards |
+| **② Description → Video** | pasted docs or notes, a web page URL, or a topic | 16:9 explainer with a animated presenter teacher and whiteboards |
 | **③ Description → Reel** | same as ② | 9:16 short under 60 s with big captions, for Shorts and Reels |
 | **⚡ Start (autopilot)** | nothing | picks a trending repo or topic (GitHub, Hacker News, Wikipedia) and makes the video |
 

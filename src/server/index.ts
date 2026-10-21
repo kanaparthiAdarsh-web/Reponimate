@@ -95,17 +95,18 @@ app.get('/api/trending', wrap(async (req, res) => {
 
 function toInput(body: Record<string, unknown>): { input: JobInput; label: string } {
   const mode = ModeSchema.parse(body.mode);
+  const channelName = typeof body.channelName === 'string' && body.channelName.trim() ? body.channelName.trim() : cfg.channelName || undefined;
   const text = typeof body.text === 'string' ? body.text : undefined;
   const url = typeof body.url === 'string' && body.url.trim() ? body.url.trim() : undefined;
   const topic = typeof body.topic === 'string' && body.topic.trim() ? body.topic.trim() : undefined;
   if (mode === 'repo-video') {
     const repo = parseGithubUrl(String(body.repoUrl ?? ''));
-    return { input: JobInputSchema.parse({ mode, repoUrl: repo.url, ref: repo.ref, preview: Boolean(body.preview) }), label: `${repo.owner}/${repo.name}` };
+    return { input: JobInputSchema.parse({ mode, repoUrl: repo.url, ref: repo.ref, preview: Boolean(body.preview), channelName }), label: `${repo.owner}/${repo.name}` };
   }
   if (!text?.trim() && !url && !topic) throw new UserError('Paste some documentation, give a URL, or enter a topic.');
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : undefined;
   return {
-    input: JobInputSchema.parse({ mode, text: text?.trim() || undefined, textTitle: title, urls: url ? [url] : [], topic, preview: Boolean(body.preview) }),
+    input: JobInputSchema.parse({ mode, text: text?.trim() || undefined, textTitle: title, urls: url ? [url] : [], topic, preview: Boolean(body.preview), channelName }),
     label: title ?? topic ?? url ?? text!.trim().split('\n')[0].slice(0, 50),
   };
 }
@@ -119,7 +120,8 @@ app.post('/api/jobs', wrap(async (req, res) => {
 app.post('/api/autopilot', wrap(async (req, res) => {
   const mode = ModeSchema.parse(req.body?.mode);
   const pick = await pickTrending(mode);
-  const input = JobInputSchema.parse({ ...pick.input, mode, preview: Boolean(req.body?.preview) });
+  const channelName = typeof req.body?.channelName === 'string' && req.body.channelName.trim() ? req.body.channelName.trim() : cfg.channelName || undefined;
+  const input = JobInputSchema.parse({ ...pick.input, mode, preview: Boolean(req.body?.preview), channelName });
   const llm = typeof req.body.llm === 'string' && req.body.llm ? req.body.llm : undefined;
   res.json({ pick: { label: pick.label, source: pick.source, url: pick.url }, job: publicJob(jobs.create(input, pick.label, llm)) });
 }));

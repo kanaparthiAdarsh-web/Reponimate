@@ -27,9 +27,9 @@ export function fixtureProps(format: Format): VideoProps {
       headline: 'index.js',
       code: { path: 'index.js', language: 'javascript', startLine: 10, endLine: 14, code: 'export default function slugify(string, options) {\n\tconst value = transliterate(string);\n\treturn value.toLowerCase();\n}', highlight: [10, 12] },
     }),
-    base('s04', 'stickman', 'How it works', 'First it transliterates. Then it lowercases the result.', { headline: 'How it works', stickman: { pose: 'explain', board: ['Transliterate', 'Lowercase', 'Join with dashes'] } }),
+    base('s04', 'presenter', 'How it works', 'First it transliterates. Then it lowercases the result.', { headline: 'How it works', presenter: { pose: 'explain', board: ['Transliterate', 'Lowercase', 'Join with dashes'] } }),
     base('s05', 'pros-cons', 'Pros & cons', 'It is small and typed, but has few tests.', { headline: 'Pros & cons', pros: ['Small', 'Typed'], cons: ['Few tests'] }),
-    base('s06', 'outro', 'Thanks', 'Thanks for watching.', { headline: 'Thanks for watching!', stickman: { pose: 'celebrate', board: [] } }),
+    base('s06', 'outro', 'Thanks', 'Thanks for watching.', { headline: 'Thanks for watching!', presenter: { pose: 'celebrate', board: [] } }),
   ];
   const script: Script = { mode: 'repo-video', format, title: 'demo-lib', subject: 'demo/demo-lib', url: 'https://github.com/demo/demo-lib', generatedBy: { provider: 'fixture', model: 'none' }, wordCount: 50, scenes };
   let t = 0;

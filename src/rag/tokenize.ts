@@ -3,7 +3,7 @@ const STOP = new Set(
     'into over under than so such can could should would will may might must do does did done have has had having not no nor ' +
     'you your we our they their he she his her them i me my what which who whom when where why how all any each few more most ' +
     'other some only own same too very just also there here about after before again further once both up down out off ' +
-    'use uses used using via per let lets one two get gets make makes like new etc while within without').split(' '),
+    'use uses used using via per let lets one two get gets make makes like new etc while within without ll ve re').split(' '),
 );
 
 /** Splits camelCase / snake_case / paths so `parseGithubUrl` matches a query about "github url parsing". */

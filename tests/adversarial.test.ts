@@ -228,6 +228,16 @@ describe('prompt injection', () => {
     expect(checkSupport('It supports four major languages, including German and Russian.', [readme, code]).supported).toBe(false);
   });
 
+  it('allows engaging rhetoric but not presuppositions or invented names', () => {
+    const c: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 1, kind: 'doc', text: 'slugify turns a messy string into a clean URL slug. Useful for URLs, filenames and IDs.' };
+    expect(checkSupport('Ever had to turn a messy string into a clean URL?', [c]).supported).toBe(true);
+    expect(checkSupport('Think of it like a tidy-up crew for your text.', [c]).supported).toBe(true);
+    expect(checkSupport('Why does NASA use it for every URL?', [c]).supported).toBe(false);
+    expect(checkSupport('Is it the fastest slug tool around?', [c]).supported).toBe(false);
+    expect(checkSupport('Think of it like the tool Google uses for 300 URLs.', [c]).supported).toBe(false);
+    expect(checkSupport('It was written by Linus Torvalds for clean URLs.', [c]).supported).toBe(false);
+  });
+
   it('catches negation flips', () => {
     const c: Chunk = { id: 'c1', sourceId: 'repo', path: 'README.md', startLine: 1, endLine: 1, kind: 'doc', text: 'safequeue supports Windows, macOS and Linux.' };
     expect(checkSupport('safequeue supports Windows and Linux.', [c]).supported).toBe(true);

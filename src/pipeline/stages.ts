@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { proportionalTimings, alignToScript, whisperWords } from '../align/align.js';
+import { ROOT } from '../core/config.js';
 import { UserError } from '../core/errors.js';
 import { ensureDir, readJson, writeJson } from '../core/files.js';
 import { probeDuration, silenceBounds } from '../core/media.js';
@@ -16,6 +17,7 @@ import { runQuality } from '../quality/quality.js';
 import { OllamaEmbedder } from '../rag/embeddings.js';
 import { KnowledgeIndex } from '../rag/index.js';
 import { mergeAudioVideo } from '../render/merge.js';
+import { choosePalette } from '../render/palette.js';
 import { renderVideo } from '../render/render.js';
 import { analyzeRepo } from '../repo/analyze.js';
 import { fetchRepo } from '../repo/fetch.js';
@@ -141,7 +143,10 @@ const script: Stage = {
       llm,
       log: ctx.log,
     });
+    result.theme = choosePalette(analysis, input.mode);
+    if (input.channelName) result.channelName = input.channelName;
     writeJson(ctx.file('script.json'), ScriptSchema.parse(result));
+    ctx.log.info(`palette: ${result.theme.name}`);
     const minutes = result.wordCount / 150;
     ctx.log.info(`${result.scenes.length} scenes, ${result.wordCount} words (≈${minutes.toFixed(1)} min)`);
     if (analysis.kind === 'repo' && minutes < 3) {
@@ -262,16 +267,63 @@ const merge: Stage = {
   title: 'Mix audio and assemble final.mp4',
   outputs: ['final.mp4'],
   async run(ctx) {
-    await mergeAudioVideo({
-      dir: ctx.dir,
-      timing: readJson(ctx.file('timing.json'), TimingSchema),
-      video: ctx.file('render/video.mp4'),
-      out: ctx.file('final.mp4'),
-      music: ctx.cfg.render.musicFile,
-      log: ctx.log,
-    });
+    const timing = readJson(ctx.file('timing.json'), TimingSchema);
+    const s = loadScript(ctx);
+    const { music, sfx } = await buildSoundtrack(ctx, s, timing);
+    await mergeAudioVideo({ dir: ctx.dir, timing, video: ctx.file('render/video.mp4'), out: ctx.file('final.mp4'), music, sfx, log: ctx.log });
   },
 };
+
+/**
+ * Music: a user-supplied MUSIC_FILE, or an original track synthesized locally (copyright-free) seeded by
+ * the subject so each video sounds different. SFX: whooshes on wipe/slide transitions, pops on keywords,
+ * a chime on the outro, all synthesized too.
+ */
+async function buildSoundtrack(ctx: StageContext, s: z.infer<typeof ScriptSchema>, timing: Timing): Promise<{ music?: string; sfx?: string }> {
+  const { runOk } = await import('../core/exec.js');
+  const py = path.join(ROOT, 'python', 'music.py');
+  const mode = ctx.cfg.render.music;
+  if (mode === 'off' || ctx.state.input.noMusic) return {};
+  let music: string | undefined = ctx.cfg.render.musicFile || undefined;
+  if (!music) {
+    music = ctx.file('render/music.wav');
+    if (!fs.existsSync(music)) {
+      const seed = crypto.createHash('sha1').update(s.subject).digest().readUInt32BE(0);
+      const mood = s.mode === 'doc-reel' ? 'upbeat' : s.mode === 'repo-video' ? 'focus' : 'chill';
+      try {
+        await runOk(ctx.cfg.tts.python, [py, 'music', music, (timing.totalSec + 1).toFixed(2), String(seed), mood], { timeoutMs: 600_000 });
+        ctx.log.info(`music: original ${mood} track synthesized locally (seed ${seed}) — no copyright claims possible`);
+      } catch (err) {
+        ctx.log.warn(`Could not synthesize music (${(err as Error).message.slice(0, 120)}); continuing without it. Install numpy: pip install numpy`);
+        music = undefined;
+      }
+    }
+  }
+  const events: { t: number; kind: string }[] = [];
+  for (const sc of timing.scenes) {
+    const scene = s.scenes.find((x) => x.id === sc.id)!;
+    if (sc.startSec > 0 && (scene.transition === 'wipe' || scene.transition === 'slide' || scene.transition === 'zoom')) events.push({ t: sc.startSec, kind: 'whoosh' });
+    if (scene.type === 'outro') events.push({ t: sc.startSec + 0.4, kind: 'chime' });
+    const keys = new Set(scene.emphasisWords.map((e) => e.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')));
+    const seen = new Set<string>();
+    for (const w of sc.words) {
+      const k = w.text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+      if (keys.has(k) && !seen.has(k)) {
+        seen.add(k);
+        events.push({ t: sc.startSec + w.start, kind: 'pop' });
+      }
+    }
+  }
+  const sfx = ctx.file('render/sfx.wav');
+  try {
+    writeJson(ctx.file('render/sfx-events.json'), events);
+    await runOk(ctx.cfg.tts.python, [py, 'sfx', sfx, timing.totalSec.toFixed(2), ctx.file('render/sfx-events.json')], { timeoutMs: 300_000 });
+  } catch (err) {
+    ctx.log.warn(`Could not synthesize sound effects (${(err as Error).message.slice(0, 120)}).`);
+    return { music };
+  }
+  return { music, sfx };
+}
 
 /* 08 ------------------------------------------------------------------ */
 const metadata: Stage = {

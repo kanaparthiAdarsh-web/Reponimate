@@ -46,8 +46,9 @@ export interface AppConfig {
   };
   aligner: AlignerName;
   whisperModel: string;
-  render: { browserExecutable: string; concurrency: number; musicFile: string; gl: string };
+  render: { browserExecutable: string; concurrency: number; musicFile: string; gl: string; music: string };
   githubToken: string;
+  channelName: string;
   port: number;
   cacheDir: string;
   outDir: string;
@@ -99,9 +100,11 @@ export function loadConfig(): AppConfig {
       concurrency: Number(env('RENDER_CONCURRENCY', '4')),
       // 'angle' was ~5x faster than 'swangle' on a CPU-only Linux box; use 'swiftshader' or 'egl' if angle fails on yours.
       gl: env('RENDER_GL', 'angle'),
+      music: env('MUSIC', 'auto'),
       musicFile: resolveFromRoot(env('MUSIC_FILE')),
     },
     githubToken: env('GITHUB_TOKEN'),
+    channelName: env('CHANNEL_NAME'),
     cacheDir: resolveFromRoot(env('CACHE_DIR', 'cache')),
     outDir: resolveFromRoot(env('OUT_DIR', 'out')),
     port: Number(env('PORT', '4777')),

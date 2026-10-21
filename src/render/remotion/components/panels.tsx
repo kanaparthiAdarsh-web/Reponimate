@@ -1,9 +1,11 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { Graph, Visual, WordTiming } from '../../../core/schemas.js';
-import { theme, type Layout } from '../theme';
+import { alpha, theme, type Layout } from '../theme';
 import type { CodeToken } from '../types';
 import { revealFrame, useEntrance } from './primitives';
+import { DrawnIcon } from './Props';
+import { LANGUAGE_COLORS } from '../../palette-data';
 
 /* ------------------------------ CodeWalkthrough ------------------------------ */
 
@@ -25,12 +27,21 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
   const hl = code.highlight.length ? code.highlight : [code.startLine];
   const step = hl.findLastIndex((_, i) => frame >= revealFrame(i, hl.length, words, fps, 1));
   const active = hl[Math.max(0, step)];
+  // Camera: ease toward the active line and zoom in slightly each time the highlight moves.
+  const stepStart = revealFrame(Math.max(0, step), hl.length, words, fps, 1);
+  const cam = spring({ frame: frame - stepStart, fps, config: { damping: 20, stiffness: 80 } });
+  const lineH = fontSize * 1.45;
+  const visibleH = height - 90;
+  const contentH = lines.length * lineH + 36;
+  const yFor = (line: number) => (contentH > visibleH ? Math.min(0, Math.max(visibleH - contentH, visibleH / 2 - (line - code.startLine) * lineH)) : 0);
+  const camY = yFor(hl[Math.max(0, step - 1)]) + (yFor(active) - yFor(hl[Math.max(0, step - 1)])) * cam;
+  const zoom = 1 + 0.04 * Math.sin(Math.min(1, cam) * Math.PI);
   return (
     <div
       style={{
         width,
         height,
-        background: '#0A1222',
+        background: theme.codeBg,
         border: `2px solid ${theme.panelBorder}`,
         borderRadius: 20,
         boxShadow: '0 30px 80px rgba(0,0,0,0.5)',
@@ -40,21 +51,21 @@ export const CodeWalkthrough: React.FC<{ code: NonNullable<Visual['code']>; toke
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px', background: theme.panel, borderBottom: `2px solid ${theme.panelBorder}` }}>
-        {['#F87171', '#FBBF24', '#4ADE80'].map((c) => (
+        {[theme.danger, theme.secondary, theme.success].map((c) => (
           <div key={c} style={{ width: 16, height: 16, borderRadius: 8, background: c }} />
         ))}
         <div style={{ marginLeft: 14, fontFamily: theme.mono, fontSize: layout.unit * 0.5, color: theme.muted }}>
           {code.path} · lines {code.startLine}–{code.endLine}
         </div>
       </div>
-      <div style={{ padding: '18px 0', fontFamily: theme.mono, fontSize, lineHeight: 1.45 }}>
+      <div style={{ padding: '18px 0', fontFamily: theme.mono, fontSize, lineHeight: 1.45, transform: `translateY(${camY}px) scale(${zoom})`, transformOrigin: `30% ${(active - code.startLine) * lineH}px` }}>
         {lines.map((line, i) => {
           const n = code.startLine + i;
           const on = n === active;
           const appear = interpolate(frame, [6 + i * 1.5, 14 + i * 1.5], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
           return (
-            <div key={i} style={{ display: 'flex', background: on ? 'rgba(34, 211, 238, 0.14)' : 'transparent', borderLeft: `6px solid ${on ? theme.cyan : 'transparent'}`, opacity: appear, whiteSpace: 'pre-wrap' }}>
-              <span style={{ width: fontSize * 3.2, textAlign: 'right', paddingRight: fontSize * 0.9, color: on ? theme.cyan : '#4B5E7E', flexShrink: 0 }}>{n}</span>
+            <div key={i} style={{ display: 'flex', background: on ? alpha(theme.primary, 0.14) : 'transparent', borderLeft: `6px solid ${on ? theme.primary : 'transparent'}`, opacity: appear, whiteSpace: 'pre-wrap' }}>
+              <span style={{ width: fontSize * 3.2, textAlign: 'right', paddingRight: fontSize * 0.9, color: on ? theme.primary : alpha(theme.muted, 0.55), flexShrink: 0 }}>{n}</span>
               <span style={{ opacity: on || !code.highlight.length ? 1 : 0.72 }}>
                 {line.map((tk, k) => (
                   <span key={k} style={{ color: tk.color }}>
@@ -140,28 +151,39 @@ export const ArchitectureDiagram: React.FC<{ graph: Graph; words: WordTiming[]; 
         const bx = b.x - (dx / len) * Math.min(trimA + 8, len / 3);
         const by = b.y - (dy / len) * Math.min(trimA + 8, len / 3);
         const ext = e.to.startsWith('ext:');
+        // Data packets travel along every edge once it is drawn.
+        const packets = p >= 1 ? [0, 0.5].map((off) => ((frame - start - 18) / (fps * 1.6) + off + i * 0.17) % 1) : [];
         return (
+          <g key={i}>
+          {packets.map((q, k) => (
+            <circle key={k} cx={ax + (bx - ax) * q} cy={ay + (by - ay) * q} r={7} fill={ext ? theme.secondary : theme.primary} opacity={Math.sin(q * Math.PI)} />
+          ))}
           <line
-            key={i}
             x1={ax}
             y1={ay}
             x2={ax + (bx - ax) * p}
             y2={ay + (by - ay) * p}
-            stroke={ext ? theme.orange : theme.muted}
+            stroke={ext ? theme.secondary : theme.muted}
             strokeWidth={3}
             strokeDasharray={ext ? '10 8' : undefined}
             markerEnd={p > 0.95 ? 'url(#arrow)' : undefined}
             opacity={0.85}
           />
+          </g>
         );
       })}
       {graph.nodes.map((n) => {
         const p0 = pos.get(n.id)!;
         const s = spring({ frame: frame - appear(n.id), fps, config: { damping: 14 } });
         const ext = n.group === 'external';
+        // Pulse a node while the narrator says its name.
+        const t = frame / fps;
+        const stem = n.label.replace(/^…/, '').split('/').filter(Boolean).pop()!.replace(/\.[a-z]+$/, '').toLowerCase();
+        const spoken = words.some((w) => t >= w.start - 0.1 && t <= w.end + 0.4 && w.text.toLowerCase().includes(stem));
+        const pulse = spoken ? 1.08 + 0.03 * Math.sin(t * 12) : 1;
         return (
-          <g key={n.id} transform={`translate(${p0.x - nodeW / 2} ${p0.y - nodeH / 2}) scale(${s})`} style={{ transformOrigin: `${nodeW / 2}px ${nodeH / 2}px`, transformBox: 'fill-box' }} opacity={s}>
-            <rect width={nodeW} height={nodeH} rx={16} fill={ext ? '#2A1A0F' : theme.panel} stroke={ext ? theme.orange : theme.cyan} strokeWidth={3} />
+          <g key={n.id} transform={`translate(${p0.x - (nodeW * s * pulse) / 2} ${p0.y - (nodeH * s * pulse) / 2}) scale(${s * pulse})`} filter={spoken ? `drop-shadow(0 0 12px ${alpha(theme.primary, 0.8)})` : undefined} style={{ transformOrigin: `${nodeW / 2}px ${nodeH / 2}px`, transformBox: 'fill-box' }} opacity={s}>
+            <rect width={nodeW} height={nodeH} rx={16} fill={ext ? alpha(theme.secondary, 0.12) : theme.panel} stroke={ext ? theme.secondary : theme.primary} strokeWidth={3} />
             <text x={nodeW / 2} y={nodeH / 2} textAnchor="middle" fontFamily={theme.mono} fontSize={fontPx} fill={theme.text} dominantBaseline="middle">
               {n.label.length > 24 ? '…' + n.label.slice(-23) : n.label}
             </text>
@@ -180,8 +202,8 @@ export const TerminalDemo: React.FC<{ terminal: NonNullable<Visual['terminal']>;
   const enter = useEntrance(2);
   const fs = layout.unit * 0.72;
   return (
-    <div style={{ width, background: '#05080F', borderRadius: 18, border: `2px solid ${theme.panelBorder}`, overflow: 'hidden', opacity: enter, transform: `scale(${0.95 + 0.05 * enter})` }}>
-      <div style={{ padding: '12px 22px', background: theme.panel, fontFamily: theme.mono, fontSize: layout.unit * 0.48, color: theme.orange }}>⚠ {terminal.label}</div>
+    <div style={{ width, background: theme.codeBg, borderRadius: 18, border: `2px solid ${theme.panelBorder}`, overflow: 'hidden', opacity: enter, transform: `scale(${0.95 + 0.05 * enter})` }}>
+      <div style={{ padding: '12px 22px', background: theme.panel, fontFamily: theme.mono, fontSize: layout.unit * 0.48, color: theme.secondary }}>⚠ {terminal.label}</div>
       <div style={{ padding: 28, fontFamily: theme.mono, fontSize: fs, lineHeight: 1.6 }}>
         {terminal.lines.map((l, i) => {
           const start = revealFrame(i, terminal.lines.length, words, fps, 0.5);
@@ -190,7 +212,7 @@ export const TerminalDemo: React.FC<{ terminal: NonNullable<Visual['terminal']>;
           const typing = chars < l.text.length;
           return (
             <div key={i} style={{ color: l.kind === 'cmd' ? theme.text : theme.muted, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-              <span style={{ color: theme.green }}>{l.kind === 'cmd' ? '$ ' : '# '}</span>
+              <span style={{ color: theme.success }}>{l.kind === 'cmd' ? '$ ' : '# '}</span>
               {l.text.slice(0, chars)}
               {typing && frame % 20 < 10 && <span style={{ background: theme.text }}>&nbsp;</span>}
             </div>
@@ -207,14 +229,14 @@ export const StatsCounter: React.FC<{ stats: NonNullable<Visual['stats']>; layou
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: layout.portrait ? '1fr 1fr' : '1fr 1fr', gap: 28 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: layout.portrait ? '1fr 1fr' : `repeat(${Math.min(4, stats.length)}, 1fr)`, gap: 20 }}>
       {stats.map((s, i) => {
         const start = revealFrame(i, stats.length, words, fps, 0.3);
         const p = spring({ frame: frame - start, fps, config: { damping: 20 } });
         const val = Math.round(interpolate(frame, [start, start + 40], [0, s.value], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
         return (
-          <div key={i} style={{ background: theme.panel, border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: '26px 30px', opacity: p, transform: `translateY(${(1 - p) * 30}px)` }}>
-            <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * 2, color: i % 2 ? theme.orange : theme.cyan }}>
+          <div key={i} style={{ background: theme.panel, border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: '20px 24px', opacity: p, transform: `translateY(${(1 - p) * 30}px)` }}>
+            <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * (layout.portrait ? 2 : 1.5), color: i % 2 ? theme.secondary : theme.primary }}>
               {val.toLocaleString('en-US')}
               {s.suffix ?? ''}
             </div>
@@ -235,7 +257,7 @@ export const FileTree: React.FC<{ files: string[]; layout: Layout; maxItems?: nu
         const o = interpolate(frame, [8 + i * 3, 16 + i * 3], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
         return (
           <div key={f} style={{ paddingLeft: depth * 28, opacity: o, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <span style={{ color: depth ? theme.muted : theme.cyan }}>{depth ? '└ ' : '▸ '}</span>
+            <span style={{ color: depth ? theme.muted : theme.primary }}>{depth ? '└ ' : '▸ '}</span>
             {f.split('/').pop()}
           </div>
         );
@@ -245,7 +267,7 @@ export const FileTree: React.FC<{ files: string[]; layout: Layout; maxItems?: nu
   );
 };
 
-export const BulletList: React.FC<{ items: string[]; layout: Layout; words: WordTiming[]; accent?: string }> = ({ items, layout, words, accent = theme.cyan }) => {
+export const BulletList: React.FC<{ items: string[]; layout: Layout; words: WordTiming[]; accent?: string }> = ({ items, layout, words, accent = theme.primary }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   return (
@@ -255,8 +277,8 @@ export const BulletList: React.FC<{ items: string[]; layout: Layout; words: Word
         const p = spring({ frame: frame - start, fps, config: { damping: 18 } });
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 22, opacity: p, transform: `translateX(${(1 - p) * 50}px)` }}>
-            <div style={{ minWidth: layout.unit * 1.2, height: layout.unit * 1.2, borderRadius: 12, background: i % 2 ? theme.orange : accent, color: theme.ink, fontFamily: theme.font, fontWeight: 800, fontSize: layout.unit * 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {i + 1}
+            <div style={{ minWidth: layout.unit * 1.3, display: 'flex' }}>
+              <DrawnIcon kind={(['bolt', 'check', 'star'] as const)[i % 3]} size={layout.unit * 1.3} color={i % 2 ? theme.secondary : accent} start={start + 4} />
             </div>
             <div style={{ fontFamily: theme.font, fontWeight: 600, fontSize: layout.unit * 0.95, color: theme.text, lineHeight: 1.3 }}>{item}</div>
           </div>
@@ -278,7 +300,9 @@ export const ProsConsPanel: React.FC<{ pros: string[]; cons: string[]; layout: L
         const p = spring({ frame: frame - start, fps, config: { damping: 18 } });
         return (
           <div key={i} style={{ display: 'flex', gap: 14, fontFamily: theme.font, fontSize: layout.unit * 0.72, color: theme.text, marginBottom: 16, opacity: p, transform: `translateY(${(1 - p) * 20}px)`, lineHeight: 1.3 }}>
-            <span style={{ color, fontWeight: 800 }}>{title === 'Pros' ? '✓' : '✗'}</span>
+            <span style={{ flexShrink: 0, display: 'flex' }}>
+              <DrawnIcon kind={title === 'Pros' ? 'check' : 'cross'} size={layout.unit * 0.85} color={color} start={start + 2} />
+            </span>
             <span>{it}</span>
           </div>
         );
@@ -288,8 +312,8 @@ export const ProsConsPanel: React.FC<{ pros: string[]; cons: string[]; layout: L
   );
   return (
     <div style={{ display: 'flex', flexDirection: layout.portrait ? 'column' : 'row', gap: 32 }}>
-      {col('Pros', theme.cyan, pros, 0)}
-      {col('Cons', theme.orange, cons, pros.length)}
+      {col('Pros', theme.primary, pros, 0)}
+      {col('Cons', theme.secondary, cons, pros.length)}
     </div>
   );
 };
@@ -299,7 +323,7 @@ export const ComparisonPanel: React.FC<{ compare: NonNullable<Visual['compare']>
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compare.columns.length}, 1fr)`, gap: 4, fontFamily: theme.font, fontSize: layout.unit * 0.65 }}>
       {compare.columns.map((c) => (
-        <div key={c} style={{ background: theme.cyan, color: theme.ink, fontWeight: 800, padding: 16 }}>
+        <div key={c} style={{ background: theme.primary, color: theme.ink, fontWeight: 800, padding: 16 }}>
           {c}
         </div>
       ))}
@@ -310,6 +334,33 @@ export const ComparisonPanel: React.FC<{ compare: NonNullable<Visual['compare']>
           </div>
         )),
       )}
+    </div>
+  );
+};
+
+/* ------------------------------ BarChart ------------------------------ */
+
+export const BarChart: React.FC<{ bars: NonNullable<Visual['bars']>; layout: Layout; words: WordTiming[]; title?: string }> = ({ bars, layout, words, title }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  const total = bars.reduce((a, b) => a + b.value, 0) || 1;
+  return (
+    <div style={{ background: theme.panel, border: `2px solid ${theme.panelBorder}`, borderRadius: 20, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {title && <div style={{ fontFamily: theme.font, fontWeight: 700, fontSize: layout.unit * 0.6, color: theme.muted }}>{title}</div>}
+      {bars.map((b, i) => {
+        const start = revealFrame(i, bars.length, words, fps, 0.6);
+        const p = spring({ frame: frame - start, fps, config: { damping: 18, stiffness: 70 } });
+        return (
+          <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ width: layout.unit * 4.2, fontFamily: theme.mono, fontSize: layout.unit * 0.55, color: theme.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.label}</div>
+            <div style={{ flex: 1, height: layout.unit * 0.8, background: theme.codeBg, borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ width: `${(b.value / max) * 100 * p}%`, height: '100%', borderRadius: 8, background: LANGUAGE_COLORS[b.label] ?? (i % 2 ? theme.secondary : theme.primary), opacity: 0.85 }} />
+            </div>
+            <div style={{ width: layout.unit * 2, fontFamily: theme.font, fontWeight: 700, fontSize: layout.unit * 0.55, color: theme.muted }}>{Math.round((b.value / total) * 100 * p)}%</div>
+          </div>
+        );
+      })}
     </div>
   );
 };

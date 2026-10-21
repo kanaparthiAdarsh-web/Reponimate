@@ -88,10 +88,10 @@ describe('description → video and reel', () => {
     expect(analysis.sections.every((s) => s.keyPoints.every((k) => k.status === 'verified' && k.evidence.length))).toBe(true);
   });
 
-  it('builds a stick-figure explainer', async () => {
+  it('builds a animated presenter explainer', async () => {
     const index = await KnowledgeIndex.build(knowledge);
     const s = await writeScript({ mode: 'doc-video', format: 'landscape', title: analysis.title, subject: analysis.title, plans: planDocVideo(analysis), index, llm: null, log: quiet() });
-    expect(s.scenes.some((x) => x.visual.stickman)).toBe(true);
+    expect(s.scenes.some((x) => x.visual.presenter)).toBe(true);
     expect(s.scenes.flatMap((x) => x.verification.droppedSentences)).toEqual([]);
   });
 

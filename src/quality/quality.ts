@@ -119,6 +119,7 @@ export async function runQuality(ctx: StageContext): Promise<QualityReport> {
     for (const s of sources) licenseNotes.unshift(`Source "${s.title}": ${s.license ?? 'license unknown — make sure you have the right to use this material'}${s.attribution ? ` (${s.attribution})` : ''}`);
   }
   if (ctx.cfg.render.musicFile) licenseNotes.push(`Music: ${path.basename(ctx.cfg.render.musicFile)} — confirm it is CC0 or from the YouTube Audio Library.`);
+  else if (fs.existsSync(ctx.file('render/music.wav'))) licenseNotes.push('Music and sound effects: synthesized locally by python/music.py from oscillators and noise — original, no samples, no third-party rights.');
 
   const report: QualityReport = {
     ok: checks.every((c) => c.ok || c.severity !== 'error'),

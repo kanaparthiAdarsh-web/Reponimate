@@ -144,6 +144,28 @@ export type DocAnalysis = z.infer<typeof DocAnalysisSchema>;
 export const AnalysisSchema = z.discriminatedUnion('kind', [RepoAnalysisSchema, DocAnalysisSchema]);
 export type Analysis = z.infer<typeof AnalysisSchema>;
 
+/* ---------- Visual theme ---------- */
+
+export const PaletteSchema = z.object({
+  name: z.string(),
+  bg: z.string(),
+  bg2: z.string(),
+  panel: z.string(),
+  panelBorder: z.string(),
+  codeBg: z.string(),
+  primary: z.string(),
+  secondary: z.string(),
+  tertiary: z.string(),
+  text: z.string(),
+  muted: z.string(),
+  ink: z.string(),
+  board: z.string(),
+  boardInk: z.string(),
+  success: z.string(),
+  danger: z.string(),
+});
+export type Palette = z.infer<typeof PaletteSchema>;
+
 /* ---------- Script ---------- */
 
 export const SceneTypeSchema = z.enum([
@@ -161,7 +183,7 @@ export const SceneTypeSchema = z.enum([
   'conclusion',
   'outro',
   // explainer / reel scene types
-  'stickman',
+  'presenter',
   'bullets',
   'definition',
   'hook',
@@ -170,6 +192,9 @@ export type SceneType = z.infer<typeof SceneTypeSchema>;
 
 export const PoseSchema = z.enum(['wave', 'point', 'think', 'explain', 'celebrate', 'confused', 'walk', 'present']);
 export type Pose = z.infer<typeof PoseSchema>;
+
+export const PropSchema = z.enum(['bulb', 'gear', 'magnifier', 'laptop', 'rocket', 'none']);
+export type Prop = z.infer<typeof PropSchema>;
 
 export const VisualSchema = z.object({
   headline: z.string().optional(),
@@ -191,14 +216,20 @@ export const VisualSchema = z.object({
   cons: z.array(z.string()).optional(),
   files: z.array(z.string()).optional(),
   compare: z.object({ columns: z.array(z.string()), rows: z.array(z.array(z.string())) }).optional(),
-  stickman: z
+  presenter: z
     .object({
       pose: PoseSchema,
       board: z.array(z.string()).default([]),
       speech: z.string().optional(),
       second: PoseSchema.optional(),
+      /** Poses cycled at sentence boundaries so the character keeps moving while it talks. */
+      poses: z.array(PoseSchema).optional(),
+      prop: PropSchema.optional(),
     })
     .optional(),
+  /** Companion host figure shown beside a panel (code, terminal, pros/cons) in repo videos. */
+  host: z.object({ poses: z.array(PoseSchema), prop: PropSchema.optional() }).optional(),
+  bars: z.array(z.object({ label: z.string(), value: z.number() })).optional(),
   terminal: z
     .object({
       label: z.string(),
@@ -238,6 +269,8 @@ export const ScriptSchema = z.object({
   url: z.string().optional(),
   generatedBy: z.object({ provider: z.string(), model: z.string() }),
   wordCount: z.number().int(),
+  theme: PaletteSchema.optional(),
+  channelName: z.string().max(40).optional(),
   scenes: z.array(SceneSchema).min(1),
 });
 export type Script = z.infer<typeof ScriptSchema>;
@@ -307,5 +340,12 @@ export const JobInputSchema = z.object({
   topic: z.string().optional(),
   preview: z.boolean().default(false),
   chunkRender: z.boolean().default(false),
+  noMusic: z.boolean().default(false),
+  channelName: z
+    .string()
+    .trim()
+    .max(40)
+    .regex(/^[^<>{}\n\r]*$/, 'Channel name cannot contain < > { } or line breaks')
+    .optional(),
 });
 export type JobInput = z.infer<typeof JobInputSchema>;

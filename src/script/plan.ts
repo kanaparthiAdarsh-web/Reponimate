@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { DocAnalysis, Evidence, Pose, RepoAnalysis, SceneType, Visual } from '../core/schemas.js';
+import type { DocAnalysis, Evidence, Pose, Prop, RepoAnalysis, SceneType, Visual } from '../core/schemas.js';
 import type { RepoFile } from '../repo/inventory.js';
 import { pickExcerpt } from './code-excerpt.js';
 
@@ -31,6 +31,38 @@ const list = (xs: string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.sli
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`;
 const short = (s: string, n: number): string => (s.length <= n ? s : s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…');
 
+/** Turns "Slugify a string. Useful for…" into a viewer question when the purpose starts with a verb. */
+function hookQuestion(purpose: string, name: string): string {
+  const first = purpose.split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '');
+  const verb = /^(Create|Build|Make|Turn|Convert|Generate|Parse|Run|Manage|Find|Get|Render|Deploy|Test|Track|Format|Write|Read|Send|Store|Search|Sync|Validate|Compile|Bundle|Serve|Slugify|Transform|Translate|Detect|Download|Upload|Monitor|Automate|Visualize|Analy[sz]e|Edit|Lint|Check)\b/;
+  if (verb.test(first) && first.split(' ').length <= 14) return `Ever needed to ${first.charAt(0).toLowerCase() + first.slice(1)}?`;
+  return `What does ${name} actually do, and why would you want it?`;
+}
+
+/** One-line open loops that pull the viewer into the next scene. They contain no claims about the subject. */
+const TEASERS: Partial<Record<SceneType, string[]>> = {
+  problem: ['So how big is this project, really?'],
+  stats: ['But how do the pieces fit together?'],
+  architecture: ["Now let's open the code that does the real work."],
+  code: ["Here's where it gets interesting.", "And there's one more piece of the puzzle."],
+  terminal: ["Before you install it, though, let's be honest about the trade-offs."],
+  'pros-cons': ['So, should you use it?'],
+};
+
+function withTeasers(plans: ScenePlan[]): ScenePlan[] {
+  return plans.map((p, i) => {
+    const next = plans[i + 1];
+    if (!next || p.type === 'outro' || p.type === 'conclusion') return p;
+    let line: string | undefined;
+    if (p.type === 'code' && next.type === 'code') line = TEASERS.code![1];
+    else if (p.type === 'code' && next.type !== 'code') line = next.type === 'terminal' ? 'So how do you actually use it?' : 'So, should you use it?';
+    else if (p.type === 'intro') line = 'Stick around, because the clever part is inside the code.';
+    else line = TEASERS[p.type]?.[0];
+    if (p.type === 'problem' && next.type !== 'stats') line = undefined;
+    return line ? { ...p, extractive: `${p.extractive} ${line}` } : p;
+  });
+}
+
 /* -------------------- Repository → long video -------------------- */
 
 export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile | undefined): ScenePlan[] {
@@ -49,8 +81,9 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
     query: `${name} purpose overview what is`,
     brief: `Hook the viewer in the first sentence with the concrete problem ${name} solves, then say what it is in one line. Promise a code-level tour.`,
     extractive: [
+      purpose ? hookQuestion(purpose, name) : '',
       purpose ? `Meet ${name}. ${sentence(purpose)}` : `Meet ${name}, a ${langs[0] ?? ''} project by ${a.repo.owner}.`,
-      `In this video we read its real source code, see how the pieces fit together, and weigh its strengths and weaknesses.`,
+      `We'll read its real source code, see how the pieces fit together, and weigh its strengths and weaknesses.`,
     ].join(' '),
     visual: { headline: name, subhead: short(purpose || `${a.repo.owner}/${name}`, 90) },
     visualDescription: 'Animated title card with the repository name and one-line purpose.',
@@ -74,9 +107,14 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
     ].join(' '),
     visual: {
       headline: 'The problem',
-      bullets: [purpose ? short(purpose, 80) : 'Purpose not documented', a.audience.text, ...a.frameworks.slice(0, 2).map((f) => f.text)].filter(Boolean).slice(0, 4),
+      presenter: {
+        pose: 'confused',
+        poses: ['confused', 'think', 'explain'],
+        prop: 'bulb',
+        board: [purpose ? short(purpose, 70) : 'Purpose not documented', a.audience.text, ...runtimeFw.slice(0, 1)].filter(Boolean).slice(0, 3),
+      },
     },
-    visualDescription: 'Bullet list revealing the problem, the audience and the stack.',
+    visualDescription: 'The host looks puzzled, gets an idea (light bulb) and writes the problem, audience and stack on a whiteboard.',
     evidence: [...a.purpose.evidence, ...a.frameworks.flatMap((f) => f.evidence)].slice(0, 4),
     targetWords: 110,
     transition: 'slide',
@@ -101,9 +139,10 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
         { label: 'Lines of text', value: a.stats.lines },
         { label: 'Languages', value: a.languages.length },
       ],
+      bars: a.languages.slice(0, 4).map((l) => ({ label: l.name, value: l.lines })),
       files: a.fileTree.slice(0, 14),
     },
-    visualDescription: 'Counters animate up next to a file tree of the repository.',
+    visualDescription: 'Counters animate up, language bars grow, and a file tree unfolds.',
     evidence: [],
     targetWords: 80,
     transition: 'fade',
@@ -121,8 +160,8 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
         .map((m) => (m.responsibility.status === 'verified' ? sentence(`${m.path}: ${m.responsibility.text}`) : ''))
         .concat(main[0] && main[0].fanIn ? [`${main[0].path} is imported by ${main[0].fanIn} other file${main[0].fanIn > 1 ? 's' : ''}.`] : [])
         .join(' '),
-      visual: { headline: 'Architecture', graph: a.importGraph },
-      visualDescription: 'Architecture diagram built from the static import graph; nodes appear one by one, then edges draw in.',
+      visual: { headline: 'Architecture', graph: a.importGraph, host: { poses: ['point', 'explain', 'think'], prop: 'gear' } },
+      visualDescription: 'Architecture diagram from the static import graph: nodes pop in, edges draw, data packets flow along them and nodes pulse when named; the host points at it.',
       evidence: main.flatMap((m) => m.responsibility.evidence).slice(0, 6),
       targetWords: 150,
       transition: 'wipe',
@@ -150,8 +189,8 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
         symbol ? `On screen is ${symbol}, from line ${visual.startLine} to ${visual.endLine}.` : `On screen are lines ${visual.startLine} to ${visual.endLine}.`,
         k.reasons.length ? sentence(`This file matters because it is ${list(k.reasons.slice(0, 2))}`) : '',
       ].join(' '),
-      visual: { headline: k.path, code: visual },
-      visualDescription: `Code panel with a genuine excerpt from ${k.path}; highlighted lines follow the narration.`,
+      visual: { headline: k.path, code: visual, host: { poses: ['point', 'think', 'explain'], prop: 'magnifier' } },
+      visualDescription: `Code panel with a genuine excerpt from ${k.path}; the camera glides to each highlighted line as it is discussed while the host inspects it with a magnifier.`,
       evidence: [{ sourceId: 'repo', path: k.path, startLine: visual.startLine, endLine: visual.endLine }],
       targetWords: 160,
       transition: 'slide',
@@ -178,6 +217,7 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
       visual: {
         headline: 'Code walkthrough: usage from the README',
         terminal: { label: 'From README (not executed)', lines: cmds.map((c) => ({ kind: 'cmd' as const, text: c.command })) },
+        host: { poses: ['present', 'explain'], prop: 'laptop' },
       },
       visualDescription: 'Terminal-styled panel typing the README commands, labelled as not executed.',
       evidence: cmds.map((c) => c.evidence),
@@ -198,7 +238,12 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
         a.strengths.length ? `On the plus side: ${list(a.strengths.slice(0, 3).map((s) => s.text.charAt(0).toLowerCase() + s.text.slice(1)))}.` : '',
         a.weaknesses.length ? `On the other hand: ${list(a.weaknesses.slice(0, 3).map((s) => s.text.charAt(0).toLowerCase() + s.text.slice(1)))}.` : '',
       ].join(' '),
-      visual: { headline: 'Pros & cons', pros: a.strengths.slice(0, 4).map((s) => short(s.text, 60)), cons: a.weaknesses.slice(0, 4).map((s) => short(s.text, 60)) },
+      visual: {
+        headline: 'Pros & cons',
+        pros: a.strengths.slice(0, 4).map((s) => short(s.text, 60)),
+        cons: a.weaknesses.slice(0, 4).map((s) => short(s.text, 60)),
+        host: { poses: ['think', 'present', 'explain'] },
+      },
       visualDescription: 'Two columns, pros in cyan and cons in orange, revealed item by item.',
       evidence: [...a.strengths, ...a.weaknesses].flatMap((c) => c.evidence).slice(0, 6),
       targetWords: 140,
@@ -217,8 +262,11 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
       a.audience.text ? sentence(`It is a good fit for ${a.audience.text.charAt(0).toLowerCase() + a.audience.text.slice(1)}`) : '',
       a.weaknesses[0] ? sentence(`Keep in mind: ${a.weaknesses[0].text.charAt(0).toLowerCase() + a.weaknesses[0].text.slice(1)}`) : '',
     ].join(' '),
-    visual: { headline: 'Verdict', bullets: [a.audience.text, ...(a.weaknesses[0] ? [`Watch out: ${short(a.weaknesses[0].text, 50)}`] : [])] },
-    visualDescription: 'Verdict card with the target audience and the main caveat.',
+    visual: {
+      headline: 'Verdict',
+      presenter: { pose: 'present', poses: ['present', 'explain', 'point'], prop: 'bulb', board: [a.audience.text, ...(a.weaknesses[0] ? [`Watch out: ${short(a.weaknesses[0].text, 50)}`] : [])] },
+    },
+    visualDescription: 'The host presents the verdict on a whiteboard: who it is for and the main caveat.',
     evidence: a.purpose.evidence,
     targetWords: 90,
     transition: 'fade',
@@ -242,12 +290,13 @@ export function planRepoVideo(a: RepoAnalysis, getFile: (p: string) => RepoFile 
     transition: 'fade',
     emphasis: [a.repo.owner],
   });
-  return plans;
+  return withTeasers(plans);
 }
 
 /* -------------------- Description → explainer video / reel -------------------- */
 
 const POSES: Pose[] = ['explain', 'point', 'think', 'present'];
+const PROPS: Prop[] = ['bulb', 'gear', 'magnifier', 'laptop'];
 
 export function planDocVideo(a: DocAnalysis): ScenePlan[] {
   const plans: ScenePlan[] = [];
@@ -261,9 +310,9 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
     title: a.title,
     query: `${a.title} ${a.summary.text}`,
     brief: `Open with a curiosity hook about ${a.title}, then state in one sentence what it is.`,
-    extractive: `Today: ${a.title}. ${sentence(a.summary.text)}`,
-    visual: { headline: a.title, stickman: { pose: 'wave', board: [], speech: 'Let me explain!' } },
-    visualDescription: 'Stick figure waves next to the title.',
+    extractive: `What is ${a.title}, and why should you care? ${sentence(a.summary.text)} Let's break it down, one piece at a time.`,
+    visual: { headline: a.title, presenter: { pose: 'wave', poses: ['wave', 'confused', 'think'], prop: 'bulb', board: [], speech: 'Let me explain!' } },
+    visualDescription: 'The presenter waves next to the title.',
     evidence: a.summary.evidence,
     targetWords: 55,
     transition: 'zoom',
@@ -271,17 +320,26 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
   });
   sections.forEach((sec, i) => {
     const points = sec.keyPoints.slice(0, 3);
-    const stick = i % 2 === 0;
+    const withBoard = i % 2 === 0;
     add({
-      type: stick ? 'stickman' : 'bullets',
+      type: withBoard ? 'presenter' : 'bullets',
       title: sec.heading,
       query: `${sec.heading} ${points.map((p) => p.text).join(' ')}`,
       brief: `Explain "${sec.heading}" simply, as a teacher would, using only the provided material. Use one everyday comparison only if it does not add facts.`,
-      extractive: points.map((p) => sentence(p.text)).join(' '),
-      visual: stick
-        ? { headline: sec.heading, stickman: { pose: POSES[i % POSES.length], board: points.map((p) => short(p.text, 48)), second: i % 4 === 2 ? 'confused' : undefined } }
-        : { headline: sec.heading, bullets: points.map((p) => short(p.text, 70)) },
-      visualDescription: stick ? 'Stick figure teaches at a whiteboard that fills with key points.' : 'Key points revealed one by one with icons.',
+      extractive: [i === 0 ? `First up: ${sec.heading}.` : i === sections.length - 1 ? `Finally: ${sec.heading}.` : `Next: ${sec.heading}.`, ...points.map((p) => sentence(p.text))].join(' ') + (i < sections.length - 1 && i % 2 === 1 ? " But that's only part of the story." : ''),
+      visual: withBoard
+        ? {
+            headline: sec.heading,
+            presenter: {
+              pose: POSES[i % POSES.length],
+              poses: [POSES[i % POSES.length], 'point', 'explain', 'think'],
+              prop: PROPS[i % PROPS.length],
+              board: points.map((p) => short(p.text, 60)),
+              second: i % 4 === 2 ? 'confused' : undefined,
+            },
+          }
+        : { headline: sec.heading, bullets: points.map((p) => short(p.text, 70)), host: { poses: ['point', 'explain', 'present'], prop: PROPS[(i + 1) % PROPS.length] } },
+      visualDescription: withBoard ? 'The presenter teaches at a whiteboard that fills with key points.' : 'Key points revealed one by one with icons.',
       evidence: points.flatMap((p) => p.evidence),
       targetWords: 120,
       transition: i % 2 ? 'slide' : 'wipe',
@@ -309,8 +367,8 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
     query: `${a.title} summary ${sections.map((s) => s.heading).join(' ')}`,
     brief: 'Recap the main ideas in order. No new facts.',
     extractive: `Let's recap. ${sentence(a.summary.text)} We covered ${list(sections.slice(0, 5).map((s) => s.heading))}.`,
-    visual: { headline: 'Recap', stickman: { pose: 'present', board: sections.slice(0, 5).map((s) => short(s.heading, 40)) } },
-    visualDescription: 'Stick figure presents a recap board listing the sections.',
+    visual: { headline: 'Recap', presenter: { pose: 'present', poses: ['present', 'point', 'explain'], prop: 'rocket', board: sections.slice(0, 5).map((s) => short(s.heading, 40)) } },
+    visualDescription: 'The presenter presents a recap board listing the sections.',
     evidence: a.summary.evidence,
     targetWords: 80,
     transition: 'fade',
@@ -322,8 +380,8 @@ export function planDocVideo(a: DocAnalysis): ScenePlan[] {
     query: a.title,
     brief: 'Thank the viewer, point to the sources in the description, ask one question.',
     extractive: `That's ${a.title} in a nutshell. The sources are linked in the description. What should I explain next? Tell me in the comments.`,
-    visual: { headline: 'Thanks for watching!', stickman: { pose: 'celebrate', board: [] } },
-    visualDescription: 'Stick figure celebrates.',
+    visual: { headline: 'Thanks for watching!', presenter: { pose: 'celebrate', poses: ['celebrate', 'wave'], prop: 'rocket', board: [] } },
+    visualDescription: 'The presenter celebrates with confetti.',
     evidence: [],
     targetWords: 35,
     transition: 'fade',
@@ -344,9 +402,9 @@ export function planDocReel(a: DocAnalysis): ScenePlan[] {
       title: a.title,
       query: `${a.title} ${a.summary.text}`,
       brief: `One punchy hook sentence (max 14 words) about ${a.title} that makes people keep watching, then one sentence saying what it is.`,
-      extractive: `${a.title} in under a minute. ${sentence(a.summary.text)}`,
-      visual: { headline: a.title, stickman: { pose: 'confused', board: [], speech: '?!' } },
-      visualDescription: 'Big title, confused stick figure.',
+      extractive: `${a.title}, explained in under a minute. ${sentence(a.summary.text)} Here's how it works.`,
+      visual: { headline: a.title, presenter: { pose: 'confused', poses: ['confused', 'think'], prop: 'bulb', board: [], speech: '?!' } },
+      visualDescription: 'Big title, confused presenter.',
       evidence: a.summary.evidence,
       targetWords: 30,
       transition: 'zoom',
@@ -354,13 +412,13 @@ export function planDocReel(a: DocAnalysis): ScenePlan[] {
     },
     ...points.map((p, i): ScenePlan => ({
       id: `s0${i + 2}`,
-      type: 'stickman',
+      type: 'presenter',
       title: p.heading,
       query: `${p.heading} ${p.k.text}`,
       brief: `One or two short sentences explaining "${p.heading}". Max 30 words. Only facts from the material.`,
       extractive: sentence(p.k.text),
-      visual: { headline: `${i + 1}. ${short(p.heading, 28)}`, stickman: { pose: POSES[i % POSES.length], board: [short(p.k.text, 110)] } },
-      visualDescription: 'Stick figure with a board showing the point.',
+      visual: { headline: `${i + 1}. ${short(p.heading, 28)}`, presenter: { pose: POSES[i % POSES.length], poses: [POSES[i % POSES.length], 'point', 'explain'], prop: PROPS[i % PROPS.length], board: [short(p.k.text, 110)] } },
+      visualDescription: 'The presenter with a board showing the point.',
       evidence: p.k.evidence,
       targetWords: 28,
       transition: 'slide',
@@ -372,9 +430,9 @@ export function planDocReel(a: DocAnalysis): ScenePlan[] {
       title: 'Follow for more',
       query: a.title,
       brief: 'One sentence payoff and a call to follow. No new facts.',
-      extractive: `Now you know the basics of ${a.title}. Follow for more quick explainers.`,
-      visual: { headline: 'Follow for more!', stickman: { pose: 'celebrate', board: [] } },
-      visualDescription: 'Celebrating stick figure and follow prompt.',
+      extractive: `That's ${a.title} in a nutshell. Follow for more quick explainers.`,
+      visual: { headline: 'Follow for more!', presenter: { pose: 'celebrate', poses: ['celebrate', 'wave'], prop: 'rocket', board: [] } },
+      visualDescription: 'Celebrating presenter and follow prompt.',
       evidence: [],
       targetWords: 18,
       transition: 'fade',

@@ -31,7 +31,11 @@ export function loadOrCreateState(dir: string, input: JobInput, extra: Partial<J
   const f = path.join(dir, 'job.json');
   if (fs.existsSync(f)) {
     const prev = readJson(f, JobStateSchema);
-    return { ...prev, ...extra, input: { ...prev.input, preview: input.preview, chunkRender: input.chunkRender } };
+    return {
+      ...prev,
+      ...extra,
+      input: { ...prev.input, preview: input.preview, chunkRender: input.chunkRender, channelName: input.channelName ?? prev.input.channelName },
+    };
   }
   const state: JobState = { input, createdAt: new Date().toISOString(), ...extra };
   writeJson(f, state);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { WordTiming } from '../../../core/schemas.js';
-import { theme, type Layout } from '../theme';
+import { alpha, theme, type Layout } from '../theme';
 
 /** Spring-driven 0→1 entrance that starts at `delay` frames. */
 export function useEntrance(delay = 0, damping = 18): number {
@@ -17,7 +17,7 @@ export function revealFrame(i: number, n: number, words: WordTiming[], fps: numb
   return Math.round(Math.max(start, i === 0 ? start : words[idx].start) * fps);
 }
 
-export const Background: React.FC<{ layout: Layout; accent?: string }> = ({ layout, accent = theme.cyan }) => {
+export const Background: React.FC<{ layout: Layout; accent?: string }> = ({ layout, accent = theme.primary }) => {
   const frame = useCurrentFrame();
   const drift = (frame * 0.25) % 80;
   return (
@@ -30,6 +30,20 @@ export const Background: React.FC<{ layout: Layout; accent?: string }> = ({ layo
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
       </svg>
+      {/* Drifting code glyphs give depth; deterministic so every render is identical. */}
+      {Array.from({ length: 18 }, (_, i) => {
+        const r = (n: number) => (Math.sin(i * 127.1 + n * 311.7) * 43758.5453) % 1;
+        const rr = (n: number) => Math.abs(r(n));
+        const speed = 0.15 + rr(1) * 0.35;
+        const y = layout.height + 60 - ((frame * speed * 2 + rr(2) * layout.height * 1.3) % (layout.height + 160));
+        const x = rr(3) * layout.width + Math.sin(frame / 50 + i) * 20;
+        const glyph = ['{ }', '</>', '( )', ';', '=>', '[ ]', '#', '&&', '01'][i % 9];
+        return (
+          <div key={i} style={{ position: 'absolute', left: x, top: y, fontFamily: theme.mono, fontSize: 22 + rr(4) * 26, color: i % 3 ? theme.primary : theme.secondary, opacity: 0.06 + rr(5) * 0.08, transform: `rotate(${Math.sin(frame / 80 + i) * 15}deg)` }}>
+            {glyph}
+          </div>
+        );
+      })}
       <div
         style={{
           position: 'absolute',
@@ -46,7 +60,7 @@ export const Background: React.FC<{ layout: Layout; accent?: string }> = ({ layo
   );
 };
 
-export const SectionTitle: React.FC<{ text: string; layout: Layout; color?: string; delay?: number }> = ({ text, layout, color = theme.cyan, delay = 0 }) => {
+export const SectionTitle: React.FC<{ text: string; layout: Layout; color?: string; delay?: number }> = ({ text, layout, color = theme.primary, delay = 0 }) => {
   const p = useEntrance(delay);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 18, opacity: p, transform: `translateY(${(1 - p) * 30}px)` }}>
@@ -126,13 +140,13 @@ export const Captions: React.FC<{ words: WordTiming[]; maxWords: number; layout:
           borderRadius: 16,
           color: theme.text,
           textShadow: big ? '0 4px 0 #000, 0 0 18px rgba(0,0,0,0.8)' : undefined,
-          maxWidth: big ? '100%' : '80%',
+          maxWidth: big ? '100%' : '68%',
         }}
       >
         {g.map((w, i) => {
           const active = t >= w.start && t <= w.end + 0.08;
           const key = w.text.toLowerCase().replace(/[^\w]/g, '');
-          const color = active ? theme.cyan : emph.has(key) ? theme.orange : theme.text;
+          const color = active ? theme.primary : emph.has(key) ? theme.secondary : theme.text;
           // Real space characters between words: margins collapse or get covered by highlighted words.
           return (
             <React.Fragment key={i}>
@@ -151,7 +165,7 @@ export const Captions: React.FC<{ words: WordTiming[]; maxWords: number; layout:
 export const ProgressBar: React.FC<{ layout: Layout; total: number }> = ({ layout, total }) => {
   const frame = useCurrentFrame();
   return (
-    <div style={{ position: 'absolute', left: 0, bottom: 0, height: 6, width: layout.width * Math.min(1, frame / Math.max(1, total)), background: `linear-gradient(90deg, ${theme.cyan}, ${theme.orange})` }} />
+    <div style={{ position: 'absolute', left: 0, bottom: 0, height: 6, width: layout.width * Math.min(1, frame / Math.max(1, total)), background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary})` }} />
   );
 };
 
@@ -165,5 +179,99 @@ export const Transition: React.FC<{ kind: string; durationInFrames: number; chil
   if (kind === 'slide') transform = `translateX(${(1 - inP) * 80}px)`;
   if (kind === 'zoom') transform = `scale(${0.92 + 0.08 * inP})`;
   if (kind === 'wipe') clip = `inset(0 ${(1 - inP) * 100}% 0 0)`;
-  return <AbsoluteFill style={{ opacity: kind === 'none' ? 1 : Math.min(inP, outP), transform, clipPath: clip }}>{children}</AbsoluteFill>;
+  // Colour panels sweep across the frame at the start of wipe/slide scenes, uncovering the new scene.
+  const sweep = kind === 'wipe' || kind === 'slide' ? interpolate(frame, [0, 16], [0, 1], { extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic) }) : 1;
+  return (
+    <>
+      <AbsoluteFill style={{ opacity: kind === 'none' ? 1 : Math.min(inP, outP), transform, clipPath: clip }}>{children}</AbsoluteFill>
+      {sweep < 1 && (
+        <AbsoluteFill style={{ pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, width: '60%', left: `${-60 + sweep * 220}%`, background: theme.primary, transform: 'skewX(-18deg)' }} />
+          <div style={{ position: 'absolute', top: 0, bottom: 0, width: '45%', left: `${-90 + sweep * 220}%`, background: theme.secondary, transform: 'skewX(-18deg)' }} />
+        </AbsoluteFill>
+      )}
+    </>
+  );
+};
+
+/** Emphasis words pop up as chips when they are spoken, then float away. */
+export const KeywordPops: React.FC<{ words: WordTiming[]; emphasis: string[]; layout: Layout }> = ({ words, emphasis, layout }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame / fps;
+  const keys = new Set(emphasis.map((e) => e.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean));
+  const hits = words.filter((w) => keys.has(w.text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')));
+  const seen = new Set<string>();
+  return (
+    <>
+      {hits.map((w, i) => {
+        const key = w.text.toLowerCase();
+        if (seen.has(key)) return null;
+        seen.add(key);
+        const age = t - w.start;
+        if (age < 0 || age > 2.2) return null;
+        const s = spring({ frame: Math.round(age * fps), fps, config: { damping: 9, stiffness: 180 } });
+        const fade = interpolate(age, [1.6, 2.2], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              right: layout.pad * 0.6 + (i % 2) * 40,
+              top: (layout.portrait ? layout.height * 0.62 : layout.height * 0.16) - age * 30,
+              padding: '10px 22px',
+              borderRadius: 999,
+              background: i % 2 ? theme.secondary : theme.primary,
+              color: theme.ink,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: layout.unit * 0.75,
+              transform: `scale(${s}) rotate(${(i % 2 ? 1 : -1) * 4}deg)`,
+              opacity: fade,
+              boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+            }}
+          >
+            {w.text.replace(/[.,!?;:]+$/, '')}
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
+/** Channel badge in the bottom-right corner: avatar with initials, name, slide-in and a periodic shine. */
+export const ChannelBadge: React.FC<{ name: string; layout: Layout }> = ({ name, layout }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = spring({ frame: frame - 20, fps, config: { damping: 16 } });
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => [...w][0]?.toUpperCase() ?? '').join('');
+  const cycle = (frame % (fps * 12)) / fps; // shine every 12 s
+  const shine = interpolate(cycle, [0, 0.9], [-30, 130], { extrapolateRight: 'clamp' });
+  const fs = layout.unit * (layout.portrait ? 0.6 : 0.52);
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: layout.portrait ? 36 : 34,
+        bottom: layout.portrait ? 54 : 30,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: `8px 20px 8px 8px`,
+        borderRadius: 999,
+        background: alpha(theme.panel, 0.88),
+        border: `2px solid ${alpha(theme.primary, 0.45)}`,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+        transform: `translateX(${(1 - enter) * 160}px)`,
+        opacity: enter,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ width: fs * 2, height: fs * 2, borderRadius: '50%', background: `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`, color: theme.ink, fontFamily: theme.font, fontWeight: 800, fontSize: fs * 0.85, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {initials}
+      </div>
+      <div style={{ fontFamily: theme.font, fontWeight: 700, fontSize: fs, color: theme.text, whiteSpace: 'nowrap', maxWidth: layout.width * 0.3, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+      <div style={{ position: 'absolute', top: 0, bottom: 0, width: '30%', left: `${shine}%`, background: `linear-gradient(90deg, transparent, ${alpha(theme.text, 0.18)}, transparent)`, transform: 'skewX(-20deg)' }} />
+    </div>
+  );
 };
